@@ -1,1 +1,468 @@
+# Project Axiom - Project Status
 
+> **Single Source of Truth**
+>
+> Before every development session:
+>
+> 1. Read this document.
+> 2. Review completed work.
+> 3. Continue from the Current Sprint.
+> 4. Update this file before ending the session.
+
+---
+
+# Project Information
+
+| Item | Value |
+|------|-------|
+| Project Name | Project Axiom |
+| Current Version | 0.0.2 |
+| Status | Architecture & Domain Design |
+| Architecture | Modular Monolith |
+| Development Method | Incremental |
+| License | MIT |
+| Repository | https://github.com/shivugitec-source/project-axiom |
+| Started On | 2026-08-02 |
+
+---
+
+# Project Vision
+
+Project Axiom is an Open Source Enterprise Foundation Platform.
+
+It is **NOT** an ERP.
+
+It is a reusable platform capable of building ERPs for multiple industries without redesigning the platform.
+
+Example Domains
+
+- Sugar Industry
+- Manufacturing
+- Retail
+- Jewellery
+- Hospital
+- Dairy
+- Logistics
+- Warehouse
+- Agriculture
+- Government
+
+---
+
+# Current Phase
+
+Phase 0
+
+Enterprise Architecture
+
+Status
+
+🟢 Active
+
+---
+
+# Current Sprint
+
+Sprint 1
+
+Name
+
+Enterprise Meta Model
+
+Status
+
+In Progress
+
+---
+
+# Completed
+
+## Repository
+
+- GitHub Repository Created
+- Initial Documentation Structure Planned
+
+## Architecture
+
+- Vision Finalized
+- Mission Finalized
+- High-Level Platform Architecture Completed
+- Open Source Strategy Selected
+- Technology Stack Selected
+- Modular Monolith Selected
+- Platform-first Philosophy Defined
+
+## Technology
+
+- Java 21
+- Spring Boot
+- PostgreSQL
+- React
+- Flutter
+- Docker
+- Kubernetes
+- Keycloak
+- MinIO
+- Prometheus
+- Grafana
+
+## Architecture Decisions
+
+ADR-001
+
+Use Modular Monolith
+
+Status
+
+Approved
+
+ADR-002
+
+Backend
+
+Spring Boot
+
+Approved
+
+ADR-003
+
+Database
+
+PostgreSQL
+
+Approved
+
+ADR-004
+
+Frontend
+
+React
+
+Approved
+
+ADR-005
+
+Mobile
+
+Flutter
+
+Approved
+
+---
+
+# New Architectural Decisions
+
+## Platform Philosophy
+
+Project Axiom is a Platform.
+
+Applications are built on top of it.
+
+Applications must never define the platform.
+
+---
+
+## Platform Layers
+
+Platform Core
+
+↓
+
+Business Engines
+
+↓
+
+Domain Applications
+
+---
+
+## Enterprise Meta Model (Draft)
+
+The platform will initially be designed around the following universal concepts:
+
+- Organization
+- Person
+- Business Partner
+- User
+- Role
+- Permission
+- Asset
+- Product
+- Service
+- Inventory
+- Transaction
+- Document
+- Workflow
+- Payment
+- Notification
+- Report
+- Audit
+- Configuration
+- Attachment
+- Location
+
+This list may evolve during Sprint 1.
+
+---
+
+# Major Discovery
+
+The platform should **NOT** use industry-specific entities internally.
+
+Instead of:
+
+- Farmer
+- Tractor
+- Sugar Factory
+
+The platform should use:
+
+- Business Partner
+- Asset
+- Organization
+
+Industry modules will extend these generic concepts.
+
+---
+
+# Current Work
+
+Enterprise Meta Model
+
+Status
+
+🟡 In Progress
+
+---
+
+# Next Deliverable
+
+Business Object Specification
+
+This document will define the DNA of Project Axiom.
+
+Every future object will inherit from this specification.
+
+Examples
+
+Organization
+
+Person
+
+Asset
+
+Product
+
+Transaction
+
+Document
+
+Workflow
+
+---
+
+# Upcoming Milestones
+
+Sprint 2
+
+Business Object Specification
+
+Sprint 3
+
+Domain Model
+
+Sprint 4
+
+Database Design
+
+Sprint 5
+
+REST API Design
+
+Sprint 6
+
+Spring Boot Foundation
+
+Sprint 7
+
+Authentication
+
+Sprint 8
+
+Organization Engine
+
+Sprint 9
+
+Business Partner Engine
+
+Sprint 10
+
+Document Engine
+
+Sprint 11
+
+Transaction Engine
+
+Sprint 12
+
+Reporting Engine
+
+Sprint 13
+
+Mobile Foundation
+
+Sprint 14
+
+Deployment
+
+---
+
+# Repository Structure
+
+project-axiom/
+
+docs/
+
+backend/
+
+frontend/
+
+mobile/
+
+database/
+
+deployment/
+
+infrastructure/
+
+scripts/
+
+tools/
+
+.github/
+
+---
+
+# Documents Planned
+
+PROJECT_STATUS.md
+
+PROJECT_ROADMAP.md
+
+PROJECT_DECISIONS.md
+
+CHANGELOG.md
+
+IDEAS.md
+
+Architecture/
+
+Business/
+
+Database/
+
+API/
+
+Security/
+
+Deployment/
+
+ADR/
+
+---
+
+# Coding Status
+
+Backend
+
+Not Started
+
+Frontend
+
+Not Started
+
+Mobile
+
+Not Started
+
+Database
+
+Not Started
+
+Deployment
+
+Not Started
+
+---
+
+# Open Questions
+
+None
+
+---
+
+# Parking Lot
+
+Future Features
+
+- AI
+- OCR
+- Voice Assistant
+- IoT
+- Drone Integration
+- RFID
+- Digital Twin
+- Blockchain
+- Offline Synchronization
+- Marketplace
+- SDK
+- Plugin System
+
+---
+
+# Last Session
+
+Date
+
+2026-08-02
+
+Completed
+
+- Created GitHub Repository
+- Defined Enterprise Vision
+- Defined Platform Philosophy
+- Selected Technology Stack
+- Selected Modular Monolith Architecture
+- Defined Enterprise Meta Model
+- Introduced Business Object concept
+- Defined Platform Layers
+
+---
+
+# Current Objective
+
+Design the Business Object Specification.
+
+This document will become the foundation of every entity in the platform.
+
+---
+
+# Long-Term Goal
+
+Project Axiom should become a configurable Enterprise Application Platform capable of powering any transaction-driven business through reusable business engines instead of rewriting applications for each industry.
+
+---
+
+# Definition of Done
+
+A milestone is complete only when:
+
+- Business Rules Complete
+- Architecture Complete
+- Documentation Complete
+- Database Design Complete
+- API Design Complete
+- Unit Tests Complete
+- Integration Tests Complete
+- Deployment Verified
+- Git Commit Completed
