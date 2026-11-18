@@ -1,10 +1,13 @@
 package io.projectaxiom.bootstrap;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import io.projectaxiom.bootstrap.system.SystemController.SystemInformation;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -16,9 +19,6 @@ class AxiomApplicationIntegrationTest {
 
     @LocalServerPort
     private int port;
-
-    @Autowired
-    private TestRestTemplate restTemplate;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -37,22 +37,27 @@ class AxiomApplicationIntegrationTest {
     }
 
     @Test
-    void exposesSystemAndHealthEndpoints() {
-        var systemResponse = restTemplate.getForEntity(
-                "http://localhost:" + port + "/api/v1/system",
-                SystemInformation.class);
+    void exposesSystemAndHealthEndpoints() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
 
-        assertThat(systemResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(systemResponse.getBody()).isNotNull();
-        assertThat(systemResponse.getBody().name()).isEqualTo("Project Axiom");
-        assertThat(systemResponse.getBody().status()).isEqualTo("RUNNING");
-        assertThat(systemResponse.getBody().timestamp()).isNotNull();
+        HttpRequest systemRequest = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/v1/system"))
+                .GET()
+                .build();
+        HttpResponse<String> systemResponse = client.send(systemRequest, HttpResponse.BodyHandlers.ofString());
 
-        var healthResponse = restTemplate.getForEntity(
-                "http://localhost:" + port + "/actuator/health",
-                String.class);
+        assertThat(systemResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        assertThat(systemResponse.body()).contains("\"name\":\"Project Axiom\"");
+        assertThat(systemResponse.body()).contains("\"status\":\"RUNNING\"");
+        assertThat(systemResponse.body()).contains("\"timestamp\"");
 
-        assertThat(healthResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(healthResponse.getBody()).contains("\"status\":\"UP\"");
+        HttpRequest healthRequest = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/actuator/health"))
+                .GET()
+                .build();
+        HttpResponse<String> healthResponse = client.send(healthRequest, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(healthResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+        assertThat(healthResponse.body()).contains("\"status\":\"UP\"");
     }
 }
