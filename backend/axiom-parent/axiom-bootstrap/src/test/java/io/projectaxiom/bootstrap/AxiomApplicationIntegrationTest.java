@@ -76,6 +76,17 @@ class AxiomApplicationIntegrationTest {
 
     @Test
     void organizationRowsAreIsolatedByTenantAndHierarchyCannotCrossTenant() {
+        Boolean applicationRoleIsSuperuser = jdbcTemplate.queryForObject(
+                "SELECT rolsuper FROM pg_roles WHERE rolname = current_user", Boolean.class);
+        assertThat(applicationRoleIsSuperuser).isFalse();
+
+        Boolean rowSecurityEnabled = jdbcTemplate.queryForObject("""
+                SELECT relrowsecurity AND relforcerowsecurity
+                FROM pg_class
+                WHERE oid = 'axiom.organization'::regclass
+                """, Boolean.class);
+        assertThat(rowSecurityEnabled).isTrue();
+
         Tenant tenantA = organizationService.createTenant("TENANT_A", "Tenant A");
         Tenant tenantB = organizationService.createTenant("TENANT_B", "Tenant B");
 
