@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Backend infrastructure foundation validated against PostgreSQL 17 in GitHub Actions; Organization capability is next.
+- Status: Infrastructure foundation validated and merged; Organization foundation under implementation.
 
 ## Sprint I-1 — Backend and infrastructure foundation
 
@@ -26,20 +26,28 @@ Validation evidence:
 - GitHub Actions run #12: successful; PostgreSQL 17 service container initialized and Maven verification completed. At that time no database-backed application integration test existed.
 - GitHub Actions run #27: successful on PR #2 head commit `64fcd75a5250636085aaf35791fd81a21231bf27`. PostgreSQL 17.12 became healthy; Spring Boot connected to it; Flyway successfully applied migration V1; the integration test verified the system and health HTTP endpoints; all 3 tests passed with 0 failures, 0 errors and 0 skipped; Maven reactor reported BUILD SUCCESS.
 - The earlier integration-test failure was caused by Spring Boot 4 modular Flyway auto-configuration not being activated by the bare Flyway core dependency. Replacing it with `spring-boot-starter-flyway` and retaining the PostgreSQL Flyway database module fixed the issue.
+- PR #2 was merged to main as commit `e9901fc618dd6820c844b21480f257bbd9fa78fc`.
 - Local Docker/Podman runtime has not been executed from this environment; validation evidence is from GitHub Actions.
 
-Sprint I-1 exit criteria:
-- [x] PostgreSQL 17 service starts and becomes healthy in CI.
-- [x] Application connects to PostgreSQL.
-- [x] Flyway V1 migration is applied and recorded.
-- [x] GET /api/v1/system responds successfully.
-- [x] GET /actuator/health responds with UP.
-- [x] Maven clean verify completes with all tests passing.
+## Sprint O-1 — Organization and tenant foundation (in progress)
 
-Next:
-1. Merge the validated infrastructure PR.
-2. Begin Organization capability as a vertical slice: domain model, persistence migration, application service, REST API, validation and PostgreSQL-backed integration tests.
-3. Finalize and enforce the tenant isolation strategy before exposing organization data APIs. Do not assume a tenant model from a `tenant_id` column alone.
+Design decisions:
+- A tenant is the customer/account isolation boundary; an organization is a business unit inside that tenant. Branches, departments and legal entities are not independent tenants by default.
+- Initial persistence model is shared PostgreSQL database and shared `axiom` schema.
+- Every tenant-owned organization row carries `tenant_id`; a composite foreign key prevents a child organization from referencing a parent in another tenant.
+- PostgreSQL row-level security (RLS) is enabled and forced for organization rows. Each transactional service operation sets a transaction-local `axiom.tenant_id`; queries without a tenant context see no organization rows.
+- Tenant provisioning is platform-level. Authentication and authorization are not implemented yet, so tenant/organization HTTP endpoints are restricted to the `local` Spring profile and must not be enabled in a production deployment.
+
+Implemented on branch `feature/organization-foundation`:
+- Tenant and Organization domain records in `axiom-core`.
+- Tenant and organization schema migration V2, hierarchy constraints, indexes and RLS policy.
+- JDBC-backed organization service in `axiom-business`.
+- Local-profile REST endpoints for tenant provisioning and organization create/list.
+- PostgreSQL integration coverage for migration V2, tenant row isolation and cross-tenant parent rejection.
+
+Validation:
+- CI for Sprint O-1 is pending. Do not merge until the PostgreSQL-backed integration suite passes.
+- Production API exposure remains blocked on the identity/authentication capability; the local-only profile restriction is intentional.
 
 ## Development rules
 - Keep the modular-monolith architecture.
