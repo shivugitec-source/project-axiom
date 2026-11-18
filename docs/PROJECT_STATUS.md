@@ -6,37 +6,31 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure foundation in implementation
+- Status: Backend CI verified; PostgreSQL runtime validation pending
 
-## Completed design decisions
-- Platform-first enterprise foundation (not a single-industry ERP)
-- Modular monolith
-- Java 21, Spring Boot, PostgreSQL
-- React frontend and Flutter mobile client remain later deliverables
+## Sprint I-1 — Backend and infrastructure foundation
 
-## Current sprint
-**Sprint I-1 — Backend and infrastructure foundation**
-
-Initial implementation committed on branch `development/infrastructure-foundation`:
+Implemented:
 - Maven parent and five modules: common, core, business, api, bootstrap
 - Spring Boot application entry point
 - System information endpoint: GET /api/v1/system
-- Actuator health endpoint configuration
+- Actuator health endpoint
 - PostgreSQL 17 local Compose service
 - Flyway schema bootstrap migration
-- Unit tests
+- Two unit tests
 - GitHub Actions backend verification workflow
 
-## Validation status
-- Files have been added to the development branch.
-- A GitHub Actions run and a local Maven build have not yet been observed. Do not mark the build as passing until CI reports success.
+Validation:
+- GitHub Actions run #5 completed successfully.
+- Maven reactor: all six entries successful.
+- Unit tests: 2 passed, 0 failures, 0 errors.
+- The CI job currently proves compilation, packaging and unit tests. It does not prove Flyway migration or live HTTP health.
 
-## Next actions
-1. Run backend CI and resolve any dependency or compilation failures.
-2. Verify PostgreSQL Compose startup and Flyway migration.
-3. Verify /actuator/health and /api/v1/system.
-4. Complete Sprint I-1 only after build, tests, and runtime checks pass.
-5. Begin the Organization capability with explicit tenant isolation design and integration tests.
+Next:
+1. Add PostgreSQL-backed Spring Boot integration test.
+2. Run local Compose and application smoke tests when Docker/Podman is available.
+3. Mark Sprint I-1 complete only after integration and runtime checks pass.
+4. Begin Organization capability with tenant isolation, persistence, REST APIs and integration tests.
 
 ## Development rules
 - Keep the modular-monolith architecture.
