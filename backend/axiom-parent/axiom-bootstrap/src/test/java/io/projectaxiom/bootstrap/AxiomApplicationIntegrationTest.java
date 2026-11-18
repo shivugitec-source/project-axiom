@@ -4,7 +4,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.UUID;
 
 import io.projectaxiom.organization.Organization;
 import io.projectaxiom.organization.OrganizationService;
@@ -13,9 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.HttpStatus;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,7 +28,7 @@ class AxiomApplicationIntegrationTest {
     private int port;
 
     @Autowired
-    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private OrganizationService organizationService;
@@ -40,10 +40,10 @@ class AxiomApplicationIntegrationTest {
                 Integer.class);
         assertThat(schemaCount).isEqualTo(1);
 
-        Integer migrationCount = jdbcTemplate.queryForObject(
+        Integer platformMigrationCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = '1' AND success = true",
                 Integer.class);
-        assertThat(migrationCount).isEqualTo(1);
+        assertThat(platformMigrationCount).isEqualTo(1);
 
         Integer organizationMigrationCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = '2' AND success = true",
@@ -61,9 +61,9 @@ class AxiomApplicationIntegrationTest {
         HttpResponse<String> systemResponse = client.send(systemRequest, HttpResponse.BodyHandlers.ofString());
 
         assertThat(systemResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-        assertThat(systemResponse.body()).contains("\\"name\\":\\"Project Axiom\\"");
-        assertThat(systemResponse.body()).contains("\\"status\\":\\"RUNNING\\"");
-        assertThat(systemResponse.body()).contains("\\"timestamp\\"");
+        assertThat(systemResponse.body()).contains("\"name\":\"Project Axiom\"");
+        assertThat(systemResponse.body()).contains("\"status\":\"RUNNING\"");
+        assertThat(systemResponse.body()).contains("\"timestamp\"");
 
         HttpRequest healthRequest = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/actuator/health"))
@@ -71,7 +71,7 @@ class AxiomApplicationIntegrationTest {
         HttpResponse<String> healthResponse = client.send(healthRequest, HttpResponse.BodyHandlers.ofString());
 
         assertThat(healthResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-        assertThat(healthResponse.body()).contains("\\"status\\":\\"UP\\"");
+        assertThat(healthResponse.body()).contains("\"status\":\"UP\"");
     }
 
     @Test
