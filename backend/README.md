@@ -12,19 +12,35 @@ Run from the repository root:
 mvn -B clean verify -f backend/axiom-parent/pom.xml
 ```
 
-The integration tests require a reachable PostgreSQL database. GitHub Actions provisions PostgreSQL 17 automatically. The tests start the Spring Boot application on a random port, verify the Flyway schema-history record, and call the system and Actuator health endpoints.
+The integration tests require a reachable PostgreSQL 17 database. GitHub Actions provisions PostgreSQL 17 and creates a restricted, non-superuser application role before running Maven. The tests verify Flyway migrations, application startup, HTTP health endpoints, and tenant isolation with PostgreSQL row-level security enabled and forced.
 
 ## Start PostgreSQL locally
 ```bash
 docker compose -f deployment/compose/docker-compose.yml up -d postgres
 ```
 
-The local development database is available at localhost:5432. Compose credentials are for local development only.
+The local database listens on localhost:5432. The application connects as the restricted `axiom` role (default password: `axiom_dev_only`). The separate `axiom_admin` role is used only to initialize the local database. These credentials are for local development only.
+
+The initialization SQL runs only when PostgreSQL creates a new data directory. If you already have a database volume from an earlier version, do not delete it if it contains data. Create the restricted role manually as a PostgreSQL administrator:
+
+```sql
+CREATE ROLE axiom LOGIN PASSWORD 'axiom_dev_only'
+    NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+GRANT CONNECT, CREATE ON DATABASE axiom TO axiom;
+```
 
 ## Run the application
 ```bash
 mvn -f backend/axiom-parent/pom.xml -pl axiom-bootstrap -am spring-boot:run
 ```
+
+To enable the tenant/organization development endpoints, use the local profile:
+
+```bash
+SPRING_PROFILES_ACTIVE=local mvn -f backend/axiom-parent/pom.xml -pl axiom-bootstrap -am spring-boot:run
+```
+
+**Security:** the tenant/organization endpoints are local-profile only until authentication and authorization are implemented. Do not enable the `local` profile in production. Production tenant identity must be derived from an authenticated principal, not a caller-controlled tenant identifier.
 
 Check:
 - http://localhost:8080/actuator/health
