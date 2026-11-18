@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: axiom-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: axiom
+      POSTGRES_USER: ${AXIOM_DB_USERNAME:-axiom}
+      POSTGRES_PASSWORD: ${AXIOM_DB_PASSWORD:-axiom_dev_only}
+    ports:
+      - "${AXIOM_DB_PORT:-5432}:5432"
+    volumes:
+      - axiom-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U axiom -d axiom"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  axiom-postgres-data:
