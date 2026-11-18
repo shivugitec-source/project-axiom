@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: axiom-platform
+  datasource:
+    url: ${AXIOM_DB_URL:jdbc:postgresql://localhost:5432/axiom}
+    username: ${AXIOM_DB_USERNAME:axiom}
+    password: ${AXIOM_DB_PASSWORD:axiom_dev_only}
+  flyway:
+    enabled: true
+    schemas: axiom
+    default-schema: axiom
+    create-schemas: true
+server:
+  port: ${AXIOM_SERVER_PORT:8080}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+info:
+  app:
+    name: Project Axiom
+    version: 0.1.0-SNAPSHOT
