@@ -43,10 +43,14 @@ Implemented on branch `feature/organization-foundation`:
 - Tenant and organization schema migration V2, hierarchy constraints, indexes and RLS policy.
 - JDBC-backed organization service in `axiom-business`.
 - Local-profile REST endpoints for tenant provisioning and organization create/list.
-- PostgreSQL integration coverage for migration V2, tenant row isolation and cross-tenant parent rejection.
+- PostgreSQL integration coverage for migration V2, tenant row isolation, cross-tenant parent rejection, non-superuser role verification, and RLS enabled/forced verification.
+- CI and local Compose now separate the PostgreSQL bootstrap administrator from the restricted application role. The application role has no superuser, database-creation, or role-creation privileges.
 
 Validation:
-- CI for Sprint O-1 is pending. Do not merge until the PostgreSQL-backed integration suite passes.
+- GitHub Actions run #46: successful on commit `8bb28d77bb4976463f47ba2da204f231a1d8b5bd`. PostgreSQL 17.12 became healthy; the restricted `axiom_app` role was provisioned; Flyway applied V1 and V2; all bootstrap integration tests and common unit tests passed; Maven reported BUILD SUCCESS.
+- The integration suite verified that the application role is not a superuser, RLS is enabled and forced, tenant B cannot read tenant A's organization rows, and a tenant B organization cannot reference a tenant A parent.
+- An expected PostgreSQL foreign-key rejection is emitted in the database log during the negative cross-tenant test; the test passes because the invalid relationship is rejected.
+- Do not merge until the status-only update has a successful CI run.
 - Production API exposure remains blocked on the identity/authentication capability; the local-only profile restriction is intentional.
 
 ## Development rules
