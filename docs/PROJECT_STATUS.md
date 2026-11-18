@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: PostgreSQL-backed application integration tests added; follow-up CI result pending
+- Status: PostgreSQL-backed application integration tests added; Boot 4 Flyway auto-configuration fix committed; follow-up CI pending
 
 ## Sprint I-1 — Backend and infrastructure foundation
 
