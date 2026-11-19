@@ -4,7 +4,13 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Set;
+import java.util.UUID;
 
+import io.projectaxiom.identity.IdentityService;
+import io.projectaxiom.identity.IdentityUser;
+import io.projectaxiom.identity.TenantMembership;
+import io.projectaxiom.identity.TenantRole;
 import io.projectaxiom.organization.Organization;
 import io.projectaxiom.organization.OrganizationService;
 import io.projectaxiom.organization.Tenant;
@@ -12,7 +18,6 @@ import io.projectaxiom.party.Party;
 import io.projectaxiom.party.PartyRole;
 import io.projectaxiom.party.PartyService;
 import io.projectaxiom.party.PartyType;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,7 +26,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,6 +46,9 @@ class AxiomApplicationIntegrationTest {
     @Autowired
     private PartyService partyService;
 
+    @Autowired
+    private IdentityService identityService;
+
     @Test
     void startsWithPostgresAndAppliesFlywayMigration() {
         Integer schemaCount = jdbcTemplate.queryForObject(
@@ -49,25 +56,12 @@ class AxiomApplicationIntegrationTest {
                 Integer.class);
         assertThat(schemaCount).isEqualTo(1);
 
-        Integer platformMigrationCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = '1' AND success = true",
-                Integer.class);
-        assertThat(platformMigrationCount).isEqualTo(1);
-
-        Integer organizationMigrationCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = '2' AND success = true",
-                Integer.class);
-        assertThat(organizationMigrationCount).isEqualTo(1);
-
-        Integer partyMigrationCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = '3' AND success = true",
-                Integer.class);
-        assertThat(partyMigrationCount).isEqualTo(1);
-
-        Integer iamMigrationCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = '4' AND success = true",
-                Integer.class);
-        assertThat(iamMigrationCount).isEqualTo(1);
+        for (String version : Set.of("1", "2", "3", "4")) {
+            Integer migrationCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = ? AND success = true",
+                    Integer.class, version);
+            assertThat(migrationCount).as("Flyway migration V" + version).isEqualTo(1);
+        }
     }
 
     @Test
@@ -95,8 +89,12 @@ class AxiomApplicationIntegrationTest {
 
     @Test
     void partyRowsAndRolesAreIsolatedByTenant() {
-        Boolean partyRls = jdbcTemplate.queryForObject("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'axiom.party'::regclass", Boolean.class);
-        Boolean roleRls = jdbcTemplate.queryForObject("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'axiom.party_role'::regclass", Boolean.class);
+        Boolean partyRls = jdbcTemplate.queryForObject(
+                "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'axiom.party'::regclass",
+                Boolean.class);
+        Boolean roleRls = jdbcTemplate.queryForObject(
+                "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'axiom.party_role'::regclass",
+                Boolean.class);
         assertThat(partyRls).isTrue();
         assertThat(roleRls).isTrue();
 
@@ -105,66 +103,69 @@ class AxiomApplicationIntegrationTest {
         Party created = partyService.createParty(tenantA.id(), PartyType.ORGANIZATION,
                 "Acme Supplies", Set.of(PartyRole.CUSTOMER, PartyRole.SUPPLIER));
         assertThat(created.roles()).containsExactlyInAnyOrder(PartyRole.CUSTOMER, PartyRole.SUPPLIER);
-        assertThat(partyService.listParties(tenantA.id())).extracting(Party::displayName).containsExactly("Acme Supplies");
+        assertThat(partyService.listParties(tenantA.id()))
+                .extracting(Party::displayName).containsExactly("Acme Supplies");
         assertThat(partyService.listParties(tenantB.id())).isEmpty();
         assertThatThrownBy(() -> partyService.getParty(tenantB.id(), created.id()))
                 .isInstanceOf(org.springframework.dao.EmptyResultDataAccessException.class);
     }
+
     @Test
-    @Transactional
-    void identityCanBelongToMultipleTenantsButMembershipAndAccessGrantsAreIsolated() {
+    void identityCanBelongToMultipleTenantsButRolesAndPermissionsRemainTenantScoped() {
         Tenant tenantA = organizationService.createTenant("IAM_TENANT_A", "IAM Tenant A");
         Tenant tenantB = organizationService.createTenant("IAM_TENANT_B", "IAM Tenant B");
 
-        String[] protectedTables = {"tenant_membership", "tenant_role", "membership_role", "role_permission"};
-        for (String table : protectedTables) {
+        for (String table : Set.of("tenant_membership", "tenant_role", "membership_role", "role_permission")) {
             Boolean forcedRls = jdbcTemplate.queryForObject(
-                    "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'axiom." + table + "'::regclass",
+                    "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'axiom."
+                            + table + "'::regclass",
                     Boolean.class);
             assertThat(forcedRls).as(table + " must have forced RLS").isTrue();
         }
 
-        java.util.UUID identityId = java.util.UUID.randomUUID();
-        jdbcTemplate.update("""
-                INSERT INTO axiom.user_identity (id, issuer, subject, email, display_name)
-                VALUES (?, 'https://id.example.test', 'subject-123', 'user@example.test', 'Test User')
-                """, identityId);
+        IdentityUser identity = identityService.registerIdentity(
+                "https://id.example.test/realms/axiom", "subject-123", "user@example.test", "Test User");
+        IdentityUser duplicate = identityService.registerIdentity(
+                "https://id.example.test/realms/axiom", "subject-123", "user@example.test", "Test User");
+        IdentityUser otherIssuer = identityService.registerIdentity(
+                "https://another-id.example.test/realms/axiom", "subject-123");
 
-        jdbcTemplate.queryForObject("SELECT set_config('axiom.tenant_id', ?, true)", String.class, tenantA.id().toString());
-        java.util.UUID membershipId = java.util.UUID.randomUUID();
-        jdbcTemplate.update("""
-                INSERT INTO axiom.tenant_membership (id, tenant_id, identity_id, status)
-                VALUES (?, ?, ?, 'ACTIVE')
-                """, membershipId, tenantA.id(), identityId);
-        jdbcTemplate.update("""
-                INSERT INTO axiom.tenant_role (tenant_id, role_code, name, is_system)
-                VALUES (?, 'TENANT_ADMIN', 'Tenant Administrator', true)
-                """, tenantA.id());
-        jdbcTemplate.update("""
-                INSERT INTO axiom.role_permission (tenant_id, role_code, permission_code)
-                VALUES (?, 'TENANT_ADMIN', 'user:manage')
-                """, tenantA.id());
-        jdbcTemplate.update("""
-                INSERT INTO axiom.membership_role (tenant_id, membership_id, role_code)
-                VALUES (?, ?, 'TENANT_ADMIN')
-                """, tenantA.id(), membershipId);
+        assertThat(duplicate.id()).isEqualTo(identity.id());
+        assertThat(otherIssuer.id()).isNotEqualTo(identity.id());
 
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.tenant_membership", Integer.class)).isEqualTo(1);
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.membership_role", Integer.class)).isEqualTo(1);
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.role_permission", Integer.class)).isEqualTo(1);
+        Set<String> administratorPermissions = Set.of(
+                "organization:read", "organization:manage",
+                "party:read", "party:manage",
+                "user:read", "user:manage",
+                "role:read", "role:manage");
+        TenantRole administratorA = identityService.createRole(
+                tenantA.id(), "TENANT_ADMIN", "Tenant Administrator", "Full tenant administration",
+                administratorPermissions);
+        TenantRole administratorB = identityService.createRole(
+                tenantB.id(), "TENANT_ADMIN", "Tenant Administrator", "Read-only party access",
+                Set.of("party:read"));
 
-        jdbcTemplate.queryForObject("SELECT set_config('axiom.tenant_id', ?, true)", String.class, tenantB.id().toString());
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.tenant_membership", Integer.class)).isZero();
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.tenant_role", Integer.class)).isZero();
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.membership_role", Integer.class)).isZero();
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.role_permission", Integer.class)).isZero();
+        TenantMembership membershipA = identityService.createMembership(
+                tenantA.id(), identity.id(), Set.of("TENANT_ADMIN"));
+        TenantMembership membershipB = identityService.createMembership(
+                tenantB.id(), identity.id(), Set.of("TENANT_ADMIN"));
 
-        // The same external identity may have an independent membership in another tenant.
-        jdbcTemplate.update("""
-                INSERT INTO axiom.tenant_membership (id, tenant_id, identity_id, status)
-                VALUES (?, ?, ?, 'INVITED')
-                """, java.util.UUID.randomUUID(), tenantB.id(), identityId);
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.tenant_membership", Integer.class)).isEqualTo(1);
+        assertThat(membershipA.roles()).extracting(TenantRole::code).containsExactly("TENANT_ADMIN");
+        assertThat(membershipB.roles()).extracting(TenantRole::code).containsExactly("TENANT_ADMIN");
+        assertThat(administratorA.permissions()).extracting("code")
+                .contains("user:manage", "party:manage");
+        assertThat(administratorB.permissions()).extracting("code").containsExactly("party:read");
+
+        assertThat(identityService.hasPermission(tenantA.id(), identity.id(), "user:manage")).isTrue();
+        assertThat(identityService.hasPermission(tenantA.id(), identity.id(), "party:manage")).isTrue();
+        assertThat(identityService.hasPermission(tenantB.id(), identity.id(), "user:manage")).isFalse();
+        assertThat(identityService.hasPermission(tenantB.id(), identity.id(), "party:read")).isTrue();
+        assertThat(identityService.hasPermission(tenantB.id(), otherIssuer.id(), "party:read")).isFalse();
+
+        assertThatThrownBy(() -> identityService.getMembership(tenantB.id(), membershipA.id()))
+                .isInstanceOf(org.springframework.dao.EmptyResultDataAccessException.class);
+        assertThat(identityService.listPermissions())
+                .extracting("code").contains("organization:read", "party:manage", "user:manage", "role:manage");
     }
 
     @Test
