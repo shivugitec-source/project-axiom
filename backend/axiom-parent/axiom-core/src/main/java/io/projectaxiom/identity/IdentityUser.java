@@ -11,6 +11,8 @@ public record IdentityUser(
         UUID id,
         String issuer,
         String subject,
+        String email,
+        String displayName,
         String status,
         Instant createdAt) {
 }
