@@ -1,11 +1,8 @@
 package io.projectaxiom.bootstrap.security;
 
-import java.util.List;
-
-import org.springframework.security.core.Authentication;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.authentication.AbstractAuthenticationToken;
 
 /**
  * Authentication established only after the resource-server JwtDecoder has validated
@@ -23,7 +20,7 @@ public final class AxiomAuthenticationToken extends AbstractAuthenticationToken 
     }
 
     @Override
-    public Object getCredentials() {
+    public Jwt getCredentials() {
         return jwt;
     }
 
