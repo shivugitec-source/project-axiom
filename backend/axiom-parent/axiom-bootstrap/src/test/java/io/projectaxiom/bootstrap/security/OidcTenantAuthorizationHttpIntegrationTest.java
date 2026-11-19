@@ -21,7 +21,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.BadJwtException;
@@ -122,8 +121,7 @@ class OidcTenantAuthorizationHttpIntegrationTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     public static class TestSecurityConfiguration {
-        @Bean
-        @Primary
+        @Bean("axiomJwtDecoder")
         public JwtDecoder testJwtDecoder() {
             return token -> {
                 if (!TOKEN.equals(token)) {

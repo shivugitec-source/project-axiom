@@ -1,6 +1,7 @@
 package io.projectaxiom.bootstrap.security;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -30,7 +31,7 @@ public class OidcSecurityConfiguration {
             Environment environment,
             AxiomJwtAuthenticationConverter authenticationConverter,
             IdentityService identityService,
-            ObjectProvider<JwtDecoder> jwtDecoderProvider) throws Exception {
+            @Qualifier("axiomJwtDecoder") ObjectProvider<JwtDecoder> jwtDecoderProvider) throws Exception {
         OidcSettings oidc = resolveOidcSettings(environment);
         boolean localProfile = environment.acceptsProfiles(Profiles.of("local"));
 
