@@ -81,9 +81,9 @@ class AxiomApplicationIntegrationTest {
         HttpResponse<String> systemResponse = client.send(systemRequest, HttpResponse.BodyHandlers.ofString());
 
         assertThat(systemResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-        assertThat(systemResponse.body()).contains("\\"name\\":\\"Project Axiom\\"");
-        assertThat(systemResponse.body()).contains("\\"status\\":\\"RUNNING\\"");
-        assertThat(systemResponse.body()).contains("\\"timestamp\\"");
+        assertThat(systemResponse.body()).contains("\"name\":\"Project Axiom\"");
+        assertThat(systemResponse.body()).contains("\"status\":\"RUNNING\"");
+        assertThat(systemResponse.body()).contains("\"timestamp\"");
 
         HttpRequest healthRequest = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/actuator/health"))
@@ -91,7 +91,7 @@ class AxiomApplicationIntegrationTest {
         HttpResponse<String> healthResponse = client.send(healthRequest, HttpResponse.BodyHandlers.ofString());
 
         assertThat(healthResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-        assertThat(healthResponse.body()).contains("\\"status\\":\\"UP\\"");
+        assertThat(healthResponse.body()).contains("\"status\":\"UP\"");
     }
 
     @Test
