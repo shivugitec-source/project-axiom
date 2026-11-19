@@ -49,12 +49,15 @@ export AXIOM_OIDC_ISSUER_URI="https://identity.example.com/realms/your-realm"
 export AXIOM_OIDC_AUDIENCE="axiom-api"
 ```
 
+The security configuration reads these exact environment variable names directly. It also accepts the explicit Spring properties `axiom.security.oidc.issuer-uri` and `axiom.security.oidc.audience`.
+
 - The issuer must exactly match the token's `iss` claim and expose OIDC discovery/JWKS metadata.
 - The audience must be the API identifier expected in the token's `aud` claim. Tokens without it are rejected.
 - Spring Security validates the JWT signature using the issuer's published keys and validates issuer, expiry/not-before timestamps, and audience.
+- Both values are required to activate bearer-token authentication. Partial or missing configuration does not enable OIDC; protected non-local routes remain denied.
 - The API is stateless; browser sessions are not created.
 - Health, info and the system-information endpoint are public. Other endpoints require a valid bearer token once OIDC is configured.
-- If OIDC is not configured, non-local protected endpoints fail closed. The explicit `local` profile remains a development-only bypass for the existing local endpoints. Never enable it in production.
+- The explicit `local` profile remains a development-only bypass for the existing local endpoints when OIDC is not configured. Never enable it in production.
 
 **Important:** this increment establishes token authentication only. It does not yet map the validated `(iss, sub)` pair to `axiom.user_identity`, select a tenant membership, authorize tenant permissions, or derive a tenant context for database RLS. A caller-supplied tenant ID is still not proof of authorization, and tenant-controlled APIs remain local-profile only until those steps are implemented.
 
