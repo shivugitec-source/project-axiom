@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import io.projectaxiom.common.TenantContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -254,8 +255,9 @@ public class IdentityService {
     }
 
     private void establishTenant(UUID tenantId) {
+        UUID effectiveTenantId = TenantContext.requireMatchingTenant(tenantId);
         jdbc.queryForObject("SELECT set_config('axiom.tenant_id', ?, true)",
-                String.class, tenantId.toString());
+                String.class, effectiveTenantId.toString());
     }
 
     private IdentityUser mapIdentityUser(ResultSet rs) throws SQLException {
