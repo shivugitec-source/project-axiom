@@ -5,7 +5,6 @@ import io.projectaxiom.identity.IdentityUser;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +14,7 @@ import org.springframework.stereotype.Component;
  * tenant roles; membership and authorization are separate capabilities.
  */
 @Component
-public final class AxiomJwtAuthenticationConverter implements Converter<Jwt, Authentication> {
+public final class AxiomJwtAuthenticationConverter implements Converter<Jwt, AxiomAuthenticationToken> {
     private final IdentityService identityService;
 
     public AxiomJwtAuthenticationConverter(IdentityService identityService) {
@@ -23,7 +22,7 @@ public final class AxiomJwtAuthenticationConverter implements Converter<Jwt, Aut
     }
 
     @Override
-    public Authentication convert(Jwt jwt) {
+    public AxiomAuthenticationToken convert(Jwt jwt) {
         String issuer = jwt.getIssuer() == null ? null : jwt.getIssuer().toString();
         String subject = jwt.getSubject();
         if (issuer == null || issuer.isBlank() || subject == null || subject.isBlank()) {
