@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import io.projectaxiom.bootstrap.security.AxiomAuthenticationToken;
 import io.projectaxiom.bootstrap.security.AxiomJwtAuthenticationConverter;
+import io.projectaxiom.common.TenantContext;
 import io.projectaxiom.identity.IdentityService;
 import io.projectaxiom.identity.IdentityUser;
 import io.projectaxiom.identity.TenantMembership;
@@ -243,6 +244,19 @@ class AxiomApplicationIntegrationTest {
                 authenticationConverter.convert(sameSubjectFromOtherIssuer);
 
         assertThat(otherIssuerAuthentication.getPrincipal().identityId()).isNotEqualTo(stored.id());
+    }
+
+    @Test
+    void verifiedRequestTenantCannotBeOverriddenByServiceTenantArgument() {
+        Tenant verifiedTenant = organizationService.createTenant("CTX_TENANT_A", "Context Tenant A");
+        Tenant otherTenant = organizationService.createTenant("CTX_TENANT_B", "Context Tenant B");
+
+        try (TenantContext.Scope ignored = TenantContext.open(verifiedTenant.id())) {
+            assertThatThrownBy(() -> organizationService.listOrganizations(otherTenant.id()))
+                    .isInstanceOf(TenantContext.TenantContextMismatchException.class);
+            assertThat(organizationService.listOrganizations(verifiedTenant.id())).isEmpty();
+        }
+        assertThat(TenantContext.currentTenantId()).isNull();
     }
 
     @Test
