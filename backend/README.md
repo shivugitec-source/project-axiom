@@ -40,7 +40,23 @@ To enable the tenant/organization development endpoints, use the local profile:
 SPRING_PROFILES_ACTIVE=local mvn -f backend/axiom-parent/pom.xml -pl axiom-bootstrap -am spring-boot:run
 ```
 
-**Security:** the tenant/organization endpoints are local-profile only until authentication and authorization are implemented. Do not enable the `local` profile in production. Production tenant identity must be derived from an authenticated principal, not a caller-controlled tenant identifier.
+## Configure OIDC for a non-local environment
+
+Project Axiom accepts OAuth 2.0 bearer access tokens issued by a trusted OpenID Connect provider. Configure both values before enabling protected APIs:
+
+```bash
+export AXIOM_OIDC_ISSUER_URI="https://identity.example.com/realms/your-realm"
+export AXIOM_OIDC_AUDIENCE="axiom-api"
+```
+
+- The issuer must exactly match the token's `iss` claim and expose OIDC discovery/JWKS metadata.
+- The audience must be the API identifier expected in the token's `aud` claim. Tokens without it are rejected.
+- Spring Security validates the JWT signature using the issuer's published keys and validates issuer, expiry/not-before timestamps, and audience.
+- The API is stateless; browser sessions are not created.
+- Health, info and the system-information endpoint are public. Other endpoints require a valid bearer token once OIDC is configured.
+- If OIDC is not configured, non-local protected endpoints fail closed. The explicit `local` profile remains a development-only bypass for the existing local endpoints. Never enable it in production.
+
+**Important:** this increment establishes token authentication only. It does not yet map the validated `(iss, sub)` pair to `axiom.user_identity`, select a tenant membership, authorize tenant permissions, or derive a tenant context for database RLS. A caller-supplied tenant ID is still not proof of authorization, and tenant-controlled APIs remain local-profile only until those steps are implemented.
 
 Check:
 - http://localhost:8080/actuator/health
