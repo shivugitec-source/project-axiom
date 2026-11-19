@@ -5,20 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 class TenantContextTest {
-    @AfterEach
-    void clearContext() {
-        UUID current = TenantContext.currentTenantId();
-        if (current != null) {
-            try (TenantContext.Scope ignored = TenantContext.open(current)) {
-                // Scope closure clears the thread-local value.
-            }
-        }
-    }
-
     @Test
     void returnsRequestedTenantWhenNoVerifiedRequestContextExists() {
         UUID tenantId = UUID.randomUUID();
