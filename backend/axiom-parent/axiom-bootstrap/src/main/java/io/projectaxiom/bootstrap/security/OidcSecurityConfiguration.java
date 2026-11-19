@@ -20,7 +20,10 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 public class OidcSecurityConfiguration {
     @Bean
-    SecurityFilterChain axiomSecurityFilterChain(HttpSecurity http, Environment environment) throws Exception {
+    SecurityFilterChain axiomSecurityFilterChain(
+            HttpSecurity http,
+            Environment environment,
+            AxiomJwtAuthenticationConverter authenticationConverter) throws Exception {
         OidcSettings oidc = resolveOidcSettings(environment);
         boolean localProfile = environment.acceptsProfiles(Profiles.of("local"));
 
@@ -45,7 +48,9 @@ public class OidcSecurityConfiguration {
             decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<Jwt>(
                     JwtValidators.createDefaultWithIssuer(oidc.issuerUri()),
                     new AudienceValidator(oidc.audience())));
-            http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(decoder)));
+            http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
+                    .decoder(decoder)
+                    .jwtAuthenticationConverter(authenticationConverter)));
         }
         return http.build();
     }
