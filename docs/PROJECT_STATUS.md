@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification and membership-verified request tenant context are merged. Tenant permission enforcement is under review; tenant controllers remain local-profile only.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context and tenant permission enforcement are merged. Tenant controllers remain local-profile only pending end-to-end HTTP/OIDC security tests.
 
 ## Completed foundations
 
@@ -88,14 +88,16 @@
 - PostgreSQL 17-backed Maven verification used the restricted non-superuser application role; BUILD SUCCESS, 26 tests, zero failures, errors or skips.
 - Tenant-controlled controllers remain local-profile only; HTTP permission enforcement is not included.
 
-### Sprint IAM-6 — Tenant permission authorization (under review)
+### Sprint IAM-6 — Tenant permission authorization
 - Add a method-security authorization component that requires an authenticated `AxiomPrincipal`, a non-null verified request tenant matching the controller tenant argument, and the requested permission granted by that tenant's active membership roles.
 - Enable Spring method security and declare explicit `organization:read`, `organization:manage`, `party:read` and `party:manage` requirements on the tenant-aware controller methods.
 - Keep tenant creation platform-level and local-development-only until platform provisioning authorization is designed.
 - Preserve the local development bypass only when the `local` profile is active and OIDC is not configured; OIDC-configured requests must pass permission checks even under the local profile.
 - Add unit tests for fail-closed behavior and an integration test that exercises method security against PostgreSQL-backed tenant role grants and forced RLS.
 - Tenant controllers remain `@Profile("local")`; this slice does not enable production tenant APIs.
-- PostgreSQL-backed CI validation is pending.
+- Initial CI runs #168 and #169 exposed the missing direct Spring Security Core dependency in `axiom-api`; added `spring-security-core` in commit `1fe4b589d0898736eff1c60b47f691b1bebcebe7`.
+- Push CI run #170 and PR CI run #171 passed on exact PR head `1fe4b589d0898736eff1c60b47f691b1bebcebe7`; PostgreSQL 17-backed Maven verification reported BUILD SUCCESS with 32 tests and zero failures, errors or skips.
+- PR #14 was squash-merged as `c72b616247de39fa6c5ea26eb717f33f02e6cf66`; main CI run #172 passed on that exact merge commit with the same 32-test result.
 
 ## Not yet implemented
 - Complete end-to-end HTTP security integration tests with OIDC authentication, verified tenant context and PostgreSQL-backed permission grants.
