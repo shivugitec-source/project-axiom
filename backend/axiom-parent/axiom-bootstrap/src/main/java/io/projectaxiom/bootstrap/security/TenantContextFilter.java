@@ -36,18 +36,18 @@ public final class TenantContextFilter extends OncePerRequestFilter {
             return;
         }
 
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()
-                || !(authentication.getPrincipal() instanceof AxiomPrincipal principal)) {
-            response.sendError(HttpStatus.UNAUTHORIZED.value(), "A validated Axiom identity is required for tenant selection");
-            return;
-        }
-
         final UUID tenantId;
         try {
             tenantId = UUID.fromString(requestedTenant);
         } catch (IllegalArgumentException exception) {
             response.sendError(HttpStatus.BAD_REQUEST.value(), "X-Tenant-ID must be a UUID");
+            return;
+        }
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || !(authentication.getPrincipal() instanceof AxiomPrincipal principal)) {
+            response.sendError(HttpStatus.UNAUTHORIZED.value(), "A validated Axiom identity is required for tenant selection");
             return;
         }
 
