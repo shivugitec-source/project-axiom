@@ -61,7 +61,9 @@ The security configuration reads these exact environment variable names directly
 
 **Tenant selection:** for OIDC-authenticated requests, an optional `X-Tenant-ID` UUID selects the tenant. The request filter checks that the authenticated Axiom identity has an ACTIVE membership in that tenant before binding a request-scoped tenant context. Tenant-aware business services reject a path/service tenant ID that differs from the verified context and set `axiom.tenant_id` transaction-locally before accessing RLS-protected rows. The context is cleared at the end of the request. The header is a selector, never proof of authorization.
 
-**Important:** this increment establishes membership-verified tenant context, but does not yet enforce tenant permissions at HTTP endpoints. Tenant-controlled controllers remain local-profile only until permission enforcement is complete.
+**Tenant permissions:** tenant-aware controller methods use Spring method security and require the permission granted by the selected tenant's active membership roles. Organization operations require `organization:read` or `organization:manage`; Party operations require `party:read` or `party:manage`. The check requires the same verified `X-Tenant-ID` request context and reads grants through `IdentityService` under transaction-local PostgreSQL RLS. Identity-provider role/group claims are not trusted. The tenant-creation endpoint remains development-only until platform provisioning authorization exists.
+
+**Exposure boundary:** Organization and Party controllers remain restricted to the `local` profile. The local development bypass is active only when the `local` profile is selected and OIDC is not configured. Do not enable tenant-controlled controllers in a non-local profile until end-to-end HTTP authorization tests are complete.
 
 Check:
 - http://localhost:8080/actuator/health

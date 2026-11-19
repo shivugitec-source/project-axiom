@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Size;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -24,6 +25,7 @@ public class PartyController {
     }
 
     @PostMapping
+    @PreAuthorize("@tenantPermissionAuthorization.hasPermission(authentication, #p0, 'party:manage')")
     @ResponseStatus(HttpStatus.CREATED)
     public Party createParty(@PathVariable UUID tenantId, @Valid @RequestBody PartyRequest request) {
         return service.createParty(tenantId, request.partyType(), request.displayName(),
@@ -31,11 +33,13 @@ public class PartyController {
     }
 
     @GetMapping
+    @PreAuthorize("@tenantPermissionAuthorization.hasPermission(authentication, #p0, 'party:read')")
     public List<Party> listParties(@PathVariable UUID tenantId) {
         return service.listParties(tenantId);
     }
 
     @GetMapping("/{partyId}")
+    @PreAuthorize("@tenantPermissionAuthorization.hasPermission(authentication, #p0, 'party:read')")
     public Party getParty(@PathVariable UUID tenantId, @PathVariable UUID partyId) {
         return service.getParty(tenantId, partyId);
     }

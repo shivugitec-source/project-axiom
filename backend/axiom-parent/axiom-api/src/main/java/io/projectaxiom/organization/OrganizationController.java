@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,12 +24,14 @@ public class OrganizationController {
     }
 
     @PostMapping("/tenants")
+    @PreAuthorize("@tenantPermissionAuthorization.isLocalDevelopmentBypass()")
     @ResponseStatus(HttpStatus.CREATED)
     public Tenant createTenant(@Valid @RequestBody TenantRequest request) {
         return service.createTenant(request.code(), request.name());
     }
 
     @PostMapping("/tenants/{tenantId}/organizations")
+    @PreAuthorize("@tenantPermissionAuthorization.hasPermission(authentication, #p0, 'organization:manage')")
     @ResponseStatus(HttpStatus.CREATED)
     public Organization createOrganization(
             @PathVariable UUID tenantId,
@@ -38,6 +41,7 @@ public class OrganizationController {
     }
 
     @GetMapping("/tenants/{tenantId}/organizations")
+    @PreAuthorize("@tenantPermissionAuthorization.hasPermission(authentication, #p0, 'organization:read')")
     public List<Organization> listOrganizations(@PathVariable UUID tenantId) {
         return service.listOrganizations(tenantId);
     }
