@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, OIDC configuration hardening and provider-neutral identity mapping are merged. Active tenant-membership verification is the current increment; request-scoped RLS context and permission enforcement remain incomplete.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, OIDC configuration hardening, provider-neutral identity mapping and active tenant-membership verification are merged. Request-scoped RLS context and permission enforcement remain incomplete.
 
 ## Completed foundations
 
@@ -66,13 +66,15 @@
 - No IdP group/role claims are translated into tenant authorities. A global identity record grants no tenant membership.
 - Tenant-controlled controllers remain local-profile only; no tenant context or production tenant authorization is claimed.
 
-## Sprint IAM-4 — active tenant membership verification (in progress)
-- Add `IdentityService.hasActiveMembership(tenantId, identityId)`.
-- The query requires an ACTIVE membership and ACTIVE global identity, scopes the query to the requested tenant, and establishes transaction-local tenant context before reading forced-RLS membership rows.
-- PostgreSQL integration coverage checks active membership, absence of cross-tenant membership, suspended membership and disabled identity.
+### Sprint IAM-4 — active tenant membership verification
+- PR #10 merged as `3d7b738d12c554b900aacb3ae3d788a6294a197b`.
+- PR CI run #134 passed on exact PR head `1846fc261857bd93fd40f4c7dce6fea54a4a6a4f`.
+- Main CI run #135 passed on exact merge commit `3d7b738d12c554b900aacb3ae3d788a6294a197b`.
+- CI used PostgreSQL 17.12 and the restricted non-superuser application role. Maven reported BUILD SUCCESS; 19 tests passed with zero failures or errors.
+- `IdentityService.hasActiveMembership(tenantId, identityId)` requires an ACTIVE membership and ACTIVE global identity, scopes the lookup to the requested tenant, and establishes transaction-local tenant context before reading forced-RLS membership rows.
+- Integration coverage verifies active membership, no cross-tenant membership, suspended membership and disabled identity.
 - This is a reusable authorization primitive only. No HTTP tenant context filter, tenant permission enforcement or production tenant endpoint is enabled in this slice.
 - Tenant-controlled controllers remain local-profile only.
-- PostgreSQL-backed CI is pending on the exact PR head.
 
 ## Not yet implemented
 - Bind a verified membership to request-scoped transaction-local `axiom.tenant_id`.
