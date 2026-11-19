@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping and active membership verification are merged. Membership-verified request tenant context is under review; HTTP permission enforcement remains incomplete.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification and membership-verified request tenant context are merged. HTTP permission enforcement remains incomplete.
 
 ## Completed foundations
 
@@ -76,15 +76,16 @@
 - This is a reusable authorization primitive only. No HTTP tenant context filter, tenant permission enforcement or production tenant endpoint is enabled in this slice.
 - Tenant-controlled controllers remain local-profile only.
 
-### Sprint IAM-5 — Membership-verified request tenant context (under review)
+### Sprint IAM-5 — Membership-verified request tenant context
 - An optional `X-Tenant-ID` request header is parsed as a UUID and checked against the authenticated Axiom identity's active membership.
 - The filter binds a request-scoped tenant context only after membership verification and always clears it after request processing.
 - Tenant-aware Organization, Party and IAM services reject tenant arguments that differ from the verified request context and continue to establish transaction-local PostgreSQL `axiom.tenant_id` for forced RLS.
 - Tenant context is enabled only in the OIDC security chain; local-profile development behavior is unchanged.
 - Added unit tests for context lifecycle, tenant mismatch, malformed selectors, missing membership and request cleanup, plus PostgreSQL integration coverage for service-level tenant mismatch.
-- The initial CI attempt exposed incorrect Spring Security/Spring Web filter imports; corrected in commit `37a2104251c1d9b480c691d56e13f0b9d6d0a4f8`.
-- Push CI run #159 and pull-request CI run #160 both passed on that exact code commit. PostgreSQL 17-backed Maven verification reported BUILD SUCCESS; 26 tests passed with zero failures, errors or skips.
-- A final documentation-only update is being revalidated before merge.
+- The initial CI attempts exposed incorrect Spring Security/Spring Web filter imports; corrected in commit `37a2104251c1d9b480c691d56e13f0b9d6d0a4f8`.
+- Final push CI run #161 and pull-request CI run #162 passed on exact PR head `a7259f502afd4b80fcc1c03967d1286679a02931`.
+- PR #12 was squash-merged as `328944158d39aafa90da23515d8efc275463e404` after the exact PR head passed both CI runs and the reviewed diff contained no unresolved security or correctness issue.
+- PostgreSQL 17-backed Maven verification used the restricted non-superuser application role; BUILD SUCCESS, 26 tests, zero failures, errors or skips.
 - Tenant-controlled controllers remain local-profile only; HTTP permission enforcement is not included.
 
 ## Not yet implemented
