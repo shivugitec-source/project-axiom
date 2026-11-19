@@ -82,7 +82,9 @@
 - Tenant-aware Organization, Party and IAM services reject tenant arguments that differ from the verified request context and continue to establish transaction-local PostgreSQL `axiom.tenant_id` for forced RLS.
 - Tenant context is enabled only in the OIDC security chain; local-profile development behavior is unchanged.
 - Added unit tests for context lifecycle, tenant mismatch, malformed selectors, missing membership and request cleanup, plus PostgreSQL integration coverage for service-level tenant mismatch.
-- CI validation on the exact PR head is pending.
+- The initial CI attempt exposed incorrect Spring Security/Spring Web filter imports; corrected in commit `37a2104251c1d9b480c691d56e13f0b9d6d0a4f8`.
+- Push CI run #159 and pull-request CI run #160 both passed on that exact code commit. PostgreSQL 17-backed Maven verification reported BUILD SUCCESS; 26 tests passed with zero failures, errors or skips.
+- A final documentation-only update is being revalidated before merge.
 - Tenant-controlled controllers remain local-profile only; HTTP permission enforcement is not included.
 
 ## Not yet implemented
