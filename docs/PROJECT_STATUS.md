@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization and Party foundations merged; IAM foundation in progress.
+- Status: Infrastructure, Organization and Party foundations merged; IAM foundation under review.
 
 ## Sprint I-1 — Backend and infrastructure foundation
 
@@ -51,7 +51,7 @@ Domain decisions:
 - Party identity is distinct from its business roles. A party may be both CUSTOMER and SUPPLIER without duplicate identity records.
 - Initial roles: CUSTOMER, SUPPLIER, EMPLOYEE, OWNER, CONTACT, PARTNER.
 - Party records and role assignments are tenant-owned and protected by forced PostgreSQL RLS.
-- This first slice intentionally stores only identity classification, display name, status and roles. Contact points, addresses, tax identifiers, legal registrations, employee employment records and relationship graphs are separate future capabilities; do not prematurely add them here.
+- This first slice intentionally stores only identity classification, display name, status and roles. Contact points, addresses, tax identifiers, legal registrations, employee employment records and relationship graphs are separate future capabilities.
 - Tenant is supplied to service/API methods for now because authentication is not yet implemented. API routes remain local-profile only. Never treat caller-supplied tenant IDs as production authorization.
 
 Implemented on branch `feature/party-foundation`:
@@ -64,25 +64,30 @@ Implemented on branch `feature/party-foundation`:
 Validation:
 - PR #4 merged to main as commit `e629e79fd5bde8f5ff0c401971854e1f2e0be78a`.
 - CI run #58 passed on the exact PR head `9d929d7f980ed2c3b6f695f7d36176a30f96994a`: https://github.com/shivugitec-source/project-axiom/actions/runs/44466933097.
+- Main-branch CI run #60 passed on merge commit `e629e79fd5bde8f5ff0c401971854e1f2e0be78a`: https://github.com/shivugitec-source/project-axiom/actions/runs/44467765933.
 
-## Sprint IAM-1 — Identity and access foundation (in progress)
+## Sprint IAM-1 — Identity and access foundation (under review)
 
 Design decisions:
-- A user identity is a provider-neutral reference (`issuer` + `subject`) to an external identity provider. Project Axiom does not store IdP passwords or implement password authentication in this slice.
-- A global identity may belong to multiple tenants; tenant membership is the tenant-specific authorization boundary.
-- Tenant roles are scoped to a tenant. Permissions are a platform-owned catalogue and roles receive permission grants.
-- Memberships, roles and grants are tenant-owned and use forced PostgreSQL RLS. The global identity lookup is intentionally not tenant-scoped so an authenticated identity can resolve its memberships across tenants; it is not exposed through an API.
-- This is a data foundation only. No login, token validation, session issuance or production authorization filter is enabled yet. Existing tenant-controlled APIs remain local-profile only.
+- A global identity is keyed by the OpenID Connect `issuer` + `subject` pair. Optional email/display-name claims are profile attributes, not identity keys.
+- Authentication credentials remain with an external identity provider; Project Axiom does not store passwords.
+- One global identity may have independent memberships in multiple tenants.
+- Roles are tenant-defined. Permissions are a platform-owned catalogue; role-permission grants are tenant-specific.
+- Tenant memberships, roles, membership-role assignments and role-permission grants have forced PostgreSQL RLS and tenant-consistent composite foreign keys.
+- The global identity table is intentionally not tenant-scoped and is not exposed through an API.
+- This is an IAM data and permission-evaluation foundation only. No login, token validation, session issuance or production authorization filter is enabled. Existing tenant-controlled APIs remain local-profile only.
 
 Implemented on branch `feature/iam-foundation`:
 - Flyway V4 creates `user_identity`, `tenant_membership`, `tenant_role`, `permission`, `role_permission` and `membership_role`.
-- Seeded initial platform permission catalogue for organization, party, user and role capabilities.
-- Forced RLS on all tenant-owned IAM tables; composite foreign keys bind memberships, roles and grants to the same tenant.
-- Added core domain records for user identity, tenant membership, tenant role and permission.
-- Integration coverage verifies migration V4, forced RLS, tenant-scoped membership/role/grant visibility and a single external identity having memberships in two tenants.
+- Seeded the initial organization, party, user and role permission catalogue.
+- Added core records for identity users, tenant memberships, tenant-defined roles and permission catalogue entries.
+- Added IdentityService operations to resolve external identities, create tenant roles and memberships, list permissions and evaluate a permission through active membership and role grants.
+- Added PostgreSQL integration coverage for migration V4, forced RLS, identity resolution, one identity in multiple tenants, and different permission grants for the same role code in separate tenants.
+- No IAM HTTP endpoints are exposed in this slice.
 
 Validation:
-- PostgreSQL 17-backed CI is pending for PR review; do not merge until the migration and integration suite pass.
+- PR #5 is open; PostgreSQL 17-backed CI must pass on the exact reviewed head before merge.
+- No production authentication or authorization claim is made by this data foundation.
 
 ## Development rules
 - Keep the modular-monolith architecture.
