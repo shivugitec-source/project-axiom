@@ -1,6 +1,7 @@
 package io.projectaxiom.bootstrap.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import jakarta.servlet.ServletException;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 class TenantContextFilterTest {
@@ -68,6 +70,38 @@ class TenantContextFilterTest {
         });
         assertThat(response.getStatus()).isEqualTo(400);
         verify(identityService, never()).hasActiveMembership(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+
+    @Test
+    void rejectsTenantSelectorWithoutAuthenticatedAxiomPrincipal() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request(tenantId.toString()), response, (req, res) -> {
+            throw new AssertionError("request must not continue");
+        });
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        verify(identityService, never()).hasActiveMembership(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void clearsTenantContextWhenDownstreamProcessingFails() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID identityId = UUID.randomUUID();
+        SecurityContextHolder.getContext().setAuthentication(
+                new AxiomAuthenticationToken(null, new AxiomPrincipal(identityId, "issuer", "subject")));
+        when(identityService.hasActiveMembership(tenantId, identityId)).thenReturn(true);
+
+        assertThatThrownBy(() -> filter.doFilter(request(tenantId.toString()), new MockHttpServletResponse(),
+                (req, res) -> {
+                    assertThat(TenantContext.currentTenantId()).isEqualTo(tenantId);
+                    throw new ServletException("downstream failure");
+                })).isInstanceOf(ServletException.class);
+
+        assertThat(TenantContext.currentTenantId()).isNull();
     }
 
     @Test

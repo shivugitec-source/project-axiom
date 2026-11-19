@@ -12,7 +12,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.BearerTokenAuthenticationFilter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import io.projectaxiom.identity.IdentityService;
 
 /**
@@ -26,7 +26,7 @@ public class OidcSecurityConfiguration {
             HttpSecurity http,
             Environment environment,
             AxiomJwtAuthenticationConverter authenticationConverter,
-            TenantContextFilter tenantContextFilter) throws Exception {
+            IdentityService identityService) throws Exception {
         OidcSettings oidc = resolveOidcSettings(environment);
         boolean localProfile = environment.acceptsProfiles(Profiles.of("local"));
 
@@ -47,7 +47,7 @@ public class OidcSecurityConfiguration {
                 });
 
         if (oidc.configured()) {
-            http.addFilterAfter(tenantContextFilter, BearerTokenAuthenticationFilter.class);
+            http.addFilterAfter(new TenantContextFilter(identityService), BearerTokenAuthenticationFilter.class);
             NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(oidc.issuerUri()).build();
             decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<Jwt>(
                     JwtValidators.createDefaultWithIssuer(oidc.issuerUri()),
@@ -59,10 +59,6 @@ public class OidcSecurityConfiguration {
         return http.build();
     }
 
-    @Bean
-    TenantContextFilter tenantContextFilter(IdentityService identityService) {
-        return new TenantContextFilter(identityService);
-    }
 
     static OidcSettings resolveOidcSettings(Environment environment) {
         return new OidcSettings(
