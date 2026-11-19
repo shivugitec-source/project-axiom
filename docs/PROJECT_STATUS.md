@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication and OIDC configuration hardening are merged. OIDC principal-to-identity mapping is the current increment; tenant authorization remains incomplete.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, OIDC configuration hardening and provider-neutral identity mapping are merged. Tenant membership authorization and request-scoped RLS context remain incomplete.
 
 ## Completed foundations
 
@@ -56,15 +56,15 @@
 - CI used PostgreSQL 17.12 and the restricted non-superuser application role; four OIDC configuration tests passed and Maven reported BUILD SUCCESS.
 - The exact documented `AXIOM_OIDC_ISSUER_URI` and `AXIOM_OIDC_AUDIENCE` variables are now resolved explicitly, with fallback to the Spring properties `axiom.security.oidc.issuer-uri` and `axiom.security.oidc.audience`. Partial configuration does not activate OIDC.
 
-## Sprint IAM-3 — OIDC principal to Axiom identity mapping (in progress)
-- Map a JWT only after the resource-server decoder has validated signature, issuer, time claims and API audience.
-- Resolve the stable `(issuer, subject)` pair through `IdentityService.registerIdentity`; the global identity record is created idempotently and grants no tenant membership.
-- Expose only the Axiom identity UUID, issuer and subject as the application principal.
-- Reject tokens missing issuer/subject and reject identities whose Axiom status is not ACTIVE.
-- Do not translate external IdP group or role claims into tenant authorities.
-- No tenant membership lookup, RLS tenant context, permission enforcement or production tenant endpoint is added in this slice.
-- Tenant-controlled controllers remain local-profile only.
-- PostgreSQL-backed CI is pending on the exact PR head.
+### Sprint IAM-3 — OIDC principal to Axiom identity mapping
+- PR #8 merged as `fcb53057af5e85d4565243990423b1ca7e525275`.
+- PR CI run #126 passed on exact PR head `b5fe78926969e28db385f5e0571bb50bd318591d`.
+- Main CI run #127 passed on exact merge commit `fcb53057af5e85d4565243990423b1ca7e525275`.
+- CI used PostgreSQL 17.12 and the restricted non-superuser application role. Maven reported BUILD SUCCESS; 18 tests passed with zero failures or errors.
+- The resource-server authentication converter maps validated `(issuer, subject)` claims to the idempotent global Axiom identity.
+- The principal exposes only identity UUID, issuer and subject. Missing identity claims and disabled Axiom identities are rejected.
+- No IdP group/role claims are translated into tenant authorities. A global identity record grants no tenant membership.
+- Tenant-controlled controllers remain local-profile only; no tenant context or production tenant authorization is claimed.
 
 ## Not yet implemented
 - Verify the requested tenant against the authenticated identity's active membership.
