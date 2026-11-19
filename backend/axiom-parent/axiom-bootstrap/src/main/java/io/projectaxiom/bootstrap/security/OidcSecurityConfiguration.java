@@ -1,12 +1,9 @@
 package io.projectaxiom.bootstrap.security;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -23,25 +20,8 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 public class OidcSecurityConfiguration {
     @Bean
-    @ConditionalOnProperty(prefix = "axiom.security.oidc", name = {"issuer-uri", "audience"})
-    JwtDecoder axiomJwtDecoder(
-            @Value("${axiom.security.oidc.issuer-uri}") String issuerUri,
-            @Value("${axiom.security.oidc.audience}") String audience) {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuerUri).build();
-        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<Jwt>(
-                JwtValidators.createDefaultWithIssuer(issuerUri),
-                new AudienceValidator(audience)));
-        return decoder;
-    }
-
-    @Bean
-    SecurityFilterChain axiomSecurityFilterChain(
-            HttpSecurity http,
-            Environment environment,
-            org.springframework.beans.factory.ObjectProvider<JwtDecoder> decoderProvider,
-            @Value("${axiom.security.oidc.issuer-uri:}") String issuerUri,
-            @Value("${axiom.security.oidc.audience:}") String audience) throws Exception {
-        boolean oidcConfigured = !issuerUri.isBlank() && !audience.isBlank();
+    SecurityFilterChain axiomSecurityFilterChain(HttpSecurity http, Environment environment) throws Exception {
+        OidcSettings oidc = resolveOidcSettings(environment);
         boolean localProfile = environment.acceptsProfiles(Profiles.of("local"));
 
         http.csrf(csrf -> csrf.disable())
@@ -49,7 +29,7 @@ public class OidcSecurityConfiguration {
                 .authorizeHttpRequests(authorize -> {
                     authorize.requestMatchers("/actuator/health", "/actuator/info", "/api/v1/system")
                             .permitAll();
-                    if (oidcConfigured) {
+                    if (oidc.configured()) {
                         authorize.anyRequest().authenticated();
                     } else if (localProfile) {
                         // Explicitly development-only: existing local-profile APIs are not production auth.
@@ -60,10 +40,33 @@ public class OidcSecurityConfiguration {
                     }
                 });
 
-        if (oidcConfigured) {
-            http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt ->
-                    jwt.decoder(decoderProvider.getObject())));
+        if (oidc.configured()) {
+            NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(oidc.issuerUri()).build();
+            decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<Jwt>(
+                    JwtValidators.createDefaultWithIssuer(oidc.issuerUri()),
+                    new AudienceValidator(oidc.audience())));
+            http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(decoder)));
         }
         return http.build();
+    }
+
+    static OidcSettings resolveOidcSettings(Environment environment) {
+        return new OidcSettings(
+                setting(environment, "AXIOM_OIDC_ISSUER_URI", "axiom.security.oidc.issuer-uri"),
+                setting(environment, "AXIOM_OIDC_AUDIENCE", "axiom.security.oidc.audience"));
+    }
+
+    private static String setting(Environment environment, String environmentVariable, String propertyName) {
+        String value = environment.getProperty(environmentVariable);
+        if (value != null && !value.isBlank()) {
+            return value;
+        }
+        return environment.getProperty(propertyName, "");
+    }
+
+    record OidcSettings(String issuerUri, String audience) {
+        boolean configured() {
+            return !issuerUri.isBlank() && !audience.isBlank();
+        }
     }
 }
