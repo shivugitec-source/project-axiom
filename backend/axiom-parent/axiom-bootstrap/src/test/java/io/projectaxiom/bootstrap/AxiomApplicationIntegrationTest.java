@@ -130,7 +130,7 @@ class AxiomApplicationIntegrationTest {
                 VALUES (?, 'https://id.example.test', 'subject-123', 'user@example.test', 'Test User')
                 """, identityId);
 
-        jdbcTemplate.update("SELECT set_config('axiom.tenant_id', ?, true)", tenantA.id().toString());
+        jdbcTemplate.queryForObject("SELECT set_config('axiom.tenant_id', ?, true)", String.class, tenantA.id().toString());
         java.util.UUID membershipId = java.util.UUID.randomUUID();
         jdbcTemplate.update("""
                 INSERT INTO axiom.tenant_membership (id, tenant_id, identity_id, status)
@@ -153,7 +153,7 @@ class AxiomApplicationIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.membership_role", Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.role_permission", Integer.class)).isEqualTo(1);
 
-        jdbcTemplate.update("SELECT set_config('axiom.tenant_id', ?, true)", tenantB.id().toString());
+        jdbcTemplate.queryForObject("SELECT set_config('axiom.tenant_id', ?, true)", String.class, tenantB.id().toString());
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.tenant_membership", Integer.class)).isZero();
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.tenant_role", Integer.class)).isZero();
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM axiom.membership_role", Integer.class)).isZero();
