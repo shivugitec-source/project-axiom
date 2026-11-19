@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context and tenant permission enforcement are merged. Tenant controllers remain local-profile only pending end-to-end HTTP/OIDC security tests.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement and end-to-end HTTP/OIDC security tests are merged. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
 
 ## Completed foundations
 
@@ -99,12 +99,14 @@
 - Push CI run #170 and PR CI run #171 passed on exact PR head `1fe4b589d0898736eff1c60b47f691b1bebcebe7`; PostgreSQL 17-backed Maven verification reported BUILD SUCCESS with 32 tests and zero failures, errors or skips.
 - PR #14 was squash-merged as `c72b616247de39fa6c5ea26eb717f33f02e6cf66`; main CI run #172 passed on that exact merge commit with the same 32-test result.
 
-### Sprint IAM-7 — End-to-end OIDC tenant authorization tests (under review)
+### Sprint IAM-7 — End-to-end OIDC tenant authorization tests
 - Make the resource-server decoder injectable while retaining the production Nimbus issuer-discovery decoder and issuer/time/audience validators as the default.
 - Add a test-only decoder and HTTP integration coverage for bearer authentication, OIDC identity mapping, active tenant membership, `X-Tenant-ID` context, method-level permission checks and PostgreSQL forced RLS.
 - Verify an authorized `party:read` request succeeds and requests with no token, no tenant selector, a mismatched tenant, no active membership or no `party:read` grant are denied.
 - Keep Organization and Party controllers local-profile only; no production tenant API exposure is included.
-- PostgreSQL-backed CI validation is pending.
+- Initial CI runs #176, #177 and #178 exposed the Spring Boot 4 MVC test package/starter mismatch; fixed with `spring-boot-starter-webmvc-test` and the Boot 4 `AutoConfigureMockMvc` package in commit `dfd27386d7346c4802eab580fcc1c5cc7a76d16d`.
+- Push CI run #179 and PR CI run #180 passed on exact PR head `dfd27386d7346c4802eab580fcc1c5cc7a76d16d`; PostgreSQL 17-backed Maven verification reported BUILD SUCCESS with 33 tests and zero failures, errors or skips.
+- PR #16 was squash-merged as `104e89e1edce581083f72c483d72309abef39e28`; main CI run #181 passed on that exact merge commit with the same 33-test result.
 
 ## Not yet implemented
 - Authorize platform-level tenant provisioning separately.
