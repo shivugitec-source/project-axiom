@@ -13,13 +13,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.OncePerRequestFilter;
-import org.springframework.stereotype.Component;
 
 /**
  * Validates an optional X-Tenant-ID request selector against the authenticated
  * Axiom identity. It never treats the header itself as authorization.
  */
-@Component
 public final class TenantContextFilter extends OncePerRequestFilter {
     public static final String TENANT_HEADER = "X-Tenant-ID";
 
