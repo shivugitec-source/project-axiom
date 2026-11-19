@@ -67,14 +67,14 @@ class TenantPermissionAuthorizationIntegrationTest {
     }
 
     @TestConfiguration(proxyBeanMethods = false)
-    static class SecurityTestConfiguration {
+    public static class SecurityTestConfiguration {
         @Bean
-        SecuredTenantOperations securedTenantOperations() {
+        public SecuredTenantOperations securedTenantOperations() {
             return new SecuredTenantOperations();
         }
     }
 
-    static class SecuredTenantOperations {
+    public static class SecuredTenantOperations {
         @PreAuthorize("@tenantPermissionAuthorization.hasPermission(authentication, #p0, 'party:read')")
         public void readParties(UUID tenantId) {
         }

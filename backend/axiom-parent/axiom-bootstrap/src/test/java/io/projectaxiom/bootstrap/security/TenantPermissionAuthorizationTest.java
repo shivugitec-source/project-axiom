@@ -11,8 +11,12 @@ import java.util.UUID;
 
 import io.projectaxiom.common.TenantContext;
 import io.projectaxiom.identity.IdentityService;
+import io.projectaxiom.organization.OrganizationController;
+import io.projectaxiom.party.PartyController;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 
 class TenantPermissionAuthorizationTest {
@@ -75,6 +79,28 @@ class TenantPermissionAuthorizationTest {
         verify(identityService, never()).hasPermission(
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any());
+    }
+
+
+    @Test
+    void tenantControllerMethodsDeclareExplicitPermissions() throws Exception {
+        assertThat(OidcSecurityConfiguration.class.isAnnotationPresent(EnableMethodSecurity.class)).isTrue();
+        assertThat(OrganizationController.class
+                .getMethod("createTenant", OrganizationController.TenantRequest.class)
+                .getAnnotation(PreAuthorize.class).value())
+                .isEqualTo("@tenantPermissionAuthorization.isLocalDevelopmentBypass()");
+        assertThat(OrganizationController.class
+                .getMethod("createOrganization", UUID.class, OrganizationController.OrganizationRequest.class)
+                .getAnnotation(PreAuthorize.class).value())
+                .contains("organization:manage");
+        assertThat(OrganizationController.class.getMethod("listOrganizations", UUID.class)
+                .getAnnotation(PreAuthorize.class).value()).contains("organization:read");
+        assertThat(PartyController.class.getMethod("createParty", UUID.class, PartyController.PartyRequest.class)
+                .getAnnotation(PreAuthorize.class).value()).contains("party:manage");
+        assertThat(PartyController.class.getMethod("listParties", UUID.class)
+                .getAnnotation(PreAuthorize.class).value()).contains("party:read");
+        assertThat(PartyController.class.getMethod("getParty", UUID.class, UUID.class)
+                .getAnnotation(PreAuthorize.class).value()).contains("party:read");
     }
 
     @Test
