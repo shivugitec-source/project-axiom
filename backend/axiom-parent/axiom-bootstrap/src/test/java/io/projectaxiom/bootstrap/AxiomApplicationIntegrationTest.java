@@ -8,6 +8,11 @@ import java.net.http.HttpResponse;
 import io.projectaxiom.organization.Organization;
 import io.projectaxiom.organization.OrganizationService;
 import io.projectaxiom.organization.Tenant;
+import io.projectaxiom.party.Party;
+import io.projectaxiom.party.PartyRole;
+import io.projectaxiom.party.PartyService;
+import io.projectaxiom.party.PartyType;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,6 +38,9 @@ class AxiomApplicationIntegrationTest {
     @Autowired
     private OrganizationService organizationService;
 
+    @Autowired
+    private PartyService partyService;
+
     @Test
     void startsWithPostgresAndAppliesFlywayMigration() {
         Integer schemaCount = jdbcTemplate.queryForObject(
@@ -49,6 +57,11 @@ class AxiomApplicationIntegrationTest {
                 "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = '2' AND success = true",
                 Integer.class);
         assertThat(organizationMigrationCount).isEqualTo(1);
+
+        Integer partyMigrationCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = '3' AND success = true",
+                Integer.class);
+        assertThat(partyMigrationCount).isEqualTo(1);
     }
 
     @Test
@@ -74,6 +87,23 @@ class AxiomApplicationIntegrationTest {
         assertThat(healthResponse.body()).contains("\"status\":\"UP\"");
     }
 
+    @Test
+    void partyRowsAndRolesAreIsolatedByTenant() {
+        Boolean partyRls = jdbcTemplate.queryForObject("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'axiom.party'::regclass", Boolean.class);
+        Boolean roleRls = jdbcTemplate.queryForObject("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'axiom.party_role'::regclass", Boolean.class);
+        assertThat(partyRls).isTrue();
+        assertThat(roleRls).isTrue();
+
+        Tenant tenantA = organizationService.createTenant("PARTY_TENANT_A", "Party Tenant A");
+        Tenant tenantB = organizationService.createTenant("PARTY_TENANT_B", "Party Tenant B");
+        Party created = partyService.createParty(tenantA.id(), PartyType.ORGANIZATION,
+                "Acme Supplies", Set.of(PartyRole.CUSTOMER, PartyRole.SUPPLIER));
+        assertThat(created.roles()).containsExactlyInAnyOrder(PartyRole.CUSTOMER, PartyRole.SUPPLIER);
+        assertThat(partyService.listParties(tenantA.id())).extracting(Party::displayName).containsExactly("Acme Supplies");
+        assertThat(partyService.listParties(tenantB.id())).isEmpty();
+        assertThatThrownBy(() -> partyService.getParty(tenantB.id(), created.id()))
+                .isInstanceOf(org.springframework.dao.EmptyResultDataAccessException.class);
+    }
     @Test
     void organizationRowsAreIsolatedByTenantAndHierarchyCannotCrossTenant() {
         Boolean applicationRoleIsSuperuser = jdbcTemplate.queryForObject(
