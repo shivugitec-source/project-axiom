@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data foundation and OIDC token authentication are merged. Tenant identity resolution and authorization remain the next security-critical increment.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication and OIDC configuration hardening are merged. OIDC principal-to-identity mapping is the current increment; tenant authorization remains incomplete.
 
 ## Completed foundations
 
@@ -49,22 +49,32 @@
 - The local profile remains a development-only bypass. Tenant-controlled controllers remain local-profile only.
 - This is token authentication only, not tenant authorization.
 
-## OIDC configuration hardening follow-up
-- The configuration now resolves the documented `AXIOM_OIDC_ISSUER_URI` and `AXIOM_OIDC_AUDIENCE` environment variables explicitly, with fallback to the Spring properties `axiom.security.oidc.issuer-uri` and `axiom.security.oidc.audience`.
-- Tests cover documented environment-variable resolution, property fallback, blank values and partial configuration. A partial configuration must not activate OIDC.
-- This follow-up is isolated in PR #7; its CI result is tracked on that PR before merge.
+### OIDC configuration hardening
+- PR #7 merged as `4d0c3ebcb9624f4a76b81cbac21ddaa075e576fd`.
+- PR CI run #112 passed on exact PR head `4aff8cf30b635e50988a4b7c6c2888e0dd14f3c8`.
+- Main CI run #113 passed on exact merge commit `4d0c3ebcb9624f4a76b81cbac21ddaa075e576fd`.
+- CI used PostgreSQL 17.12 and the restricted non-superuser application role; four OIDC configuration tests passed and Maven reported BUILD SUCCESS.
+- The exact documented `AXIOM_OIDC_ISSUER_URI` and `AXIOM_OIDC_AUDIENCE` variables are now resolved explicitly, with fallback to the Spring properties `axiom.security.oidc.issuer-uri` and `axiom.security.oidc.audience`. Partial configuration does not activate OIDC.
+
+## Sprint IAM-3 — OIDC principal to Axiom identity mapping (in progress)
+- Map a JWT only after the resource-server decoder has validated signature, issuer, time claims and API audience.
+- Resolve the stable `(issuer, subject)` pair through `IdentityService.registerIdentity`; the global identity record is created idempotently and grants no tenant membership.
+- Expose only the Axiom identity UUID, issuer and subject as the application principal.
+- Reject tokens missing issuer/subject and reject identities whose Axiom status is not ACTIVE.
+- Do not translate external IdP group or role claims into tenant authorities.
+- No tenant membership lookup, RLS tenant context, permission enforcement or production tenant endpoint is added in this slice.
+- Tenant-controlled controllers remain local-profile only.
+- PostgreSQL-backed CI is pending on the exact PR head.
 
 ## Not yet implemented
-- Resolve validated JWT `(iss, sub)` claims to `axiom.user_identity`.
-- Verify the caller's active tenant membership before establishing tenant context.
-- Derive transaction-local `axiom.tenant_id` only from that authenticated membership.
+- Verify the requested tenant against the authenticated identity's active membership.
+- Derive transaction-local `axiom.tenant_id` only from that verified membership.
 - Enforce tenant-scoped permissions before exposing tenant-controlled APIs in a non-local profile.
 
 ## Next implementation sequence
-1. Map the validated OIDC principal to the provider-neutral Axiom identity.
-2. Resolve the requested tenant against that identity's active membership; a path/header tenant identifier alone is never authority.
-3. Bind the verified tenant to transaction-local PostgreSQL RLS context and preserve the restricted database role.
-4. Enforce tenant permissions before enabling production tenant APIs.
+1. Verify an authenticated Axiom identity's active membership for the requested tenant; a path/header tenant identifier alone is never authority.
+2. Bind the verified tenant to transaction-local PostgreSQL RLS context and preserve the restricted database role.
+3. Enforce tenant permissions before enabling production tenant APIs.
 
 ## Development rules
 - Keep the modular-monolith architecture.
