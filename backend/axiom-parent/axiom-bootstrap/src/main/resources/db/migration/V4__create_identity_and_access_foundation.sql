@@ -8,6 +8,8 @@ CREATE TABLE axiom.user_identity (
     status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_user_identity_issuer_subject UNIQUE (issuer, subject),
+    CONSTRAINT ck_user_identity_issuer_nonblank CHECK (length(btrim(issuer)) > 0),
+    CONSTRAINT ck_user_identity_subject_nonblank CHECK (length(btrim(subject)) > 0),
     CONSTRAINT ck_user_identity_status CHECK (status IN ('ACTIVE', 'DISABLED'))
 );
 
@@ -34,7 +36,8 @@ CREATE TABLE axiom.tenant_role (
     is_system BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_tenant_role PRIMARY KEY (tenant_id, role_code),
-    CONSTRAINT ck_tenant_role_code CHECK (role_code ~ '^[A-Z][A-Z0-9_]*$')
+    CONSTRAINT ck_tenant_role_code CHECK (role_code ~ '^[A-Z][A-Z0-9_]*$'),
+    CONSTRAINT ck_tenant_role_name_nonblank CHECK (length(btrim(name)) > 0)
 );
 
 CREATE TABLE axiom.permission (
