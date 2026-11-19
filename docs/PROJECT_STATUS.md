@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, OIDC configuration hardening and provider-neutral identity mapping are merged. Tenant membership authorization and request-scoped RLS context remain incomplete.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, OIDC configuration hardening and provider-neutral identity mapping are merged. Active tenant-membership verification is the current increment; request-scoped RLS context and permission enforcement remain incomplete.
 
 ## Completed foundations
 
@@ -66,15 +66,21 @@
 - No IdP group/role claims are translated into tenant authorities. A global identity record grants no tenant membership.
 - Tenant-controlled controllers remain local-profile only; no tenant context or production tenant authorization is claimed.
 
+## Sprint IAM-4 — active tenant membership verification (in progress)
+- Add `IdentityService.hasActiveMembership(tenantId, identityId)`.
+- The query requires an ACTIVE membership and ACTIVE global identity, scopes the query to the requested tenant, and establishes transaction-local tenant context before reading forced-RLS membership rows.
+- PostgreSQL integration coverage checks active membership, absence of cross-tenant membership, suspended membership and disabled identity.
+- This is a reusable authorization primitive only. No HTTP tenant context filter, tenant permission enforcement or production tenant endpoint is enabled in this slice.
+- Tenant-controlled controllers remain local-profile only.
+- PostgreSQL-backed CI is pending on the exact PR head.
+
 ## Not yet implemented
-- Verify the requested tenant against the authenticated identity's active membership.
-- Derive transaction-local `axiom.tenant_id` only from that verified membership.
+- Bind a verified membership to request-scoped transaction-local `axiom.tenant_id`.
 - Enforce tenant-scoped permissions before exposing tenant-controlled APIs in a non-local profile.
 
 ## Next implementation sequence
-1. Verify an authenticated Axiom identity's active membership for the requested tenant; a path/header tenant identifier alone is never authority.
-2. Bind the verified tenant to transaction-local PostgreSQL RLS context and preserve the restricted database role.
-3. Enforce tenant permissions before enabling production tenant APIs.
+1. Bind the verified membership to request-scoped transaction-local PostgreSQL RLS context and preserve the restricted database role.
+2. Enforce tenant permissions before enabling production tenant APIs; a path/header tenant identifier alone is never authority.
 
 ## Development rules
 - Keep the modular-monolith architecture.

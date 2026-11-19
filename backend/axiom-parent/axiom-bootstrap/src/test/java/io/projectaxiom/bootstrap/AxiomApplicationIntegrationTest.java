@@ -28,6 +28,8 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -43,6 +45,9 @@ class AxiomApplicationIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private OrganizationService organizationService;
@@ -173,6 +178,37 @@ class AxiomApplicationIntegrationTest {
                 .isInstanceOf(org.springframework.dao.EmptyResultDataAccessException.class);
         assertThat(identityService.listPermissions())
                 .extracting("code").contains("organization:read", "party:manage", "user:manage", "role:manage");
+    }
+
+    @Test
+    void activeMembershipRequiresMatchingTenantAndActiveIdentityAndMembership() {
+        Tenant tenantA = organizationService.createTenant("IAM_MEMBERSHIP_TENANT_A", "Membership Tenant A");
+        Tenant tenantB = organizationService.createTenant("IAM_MEMBERSHIP_TENANT_B", "Membership Tenant B");
+        String subject = "membership-" + UUID.randomUUID();
+        IdentityUser identity = identityService.registerIdentity(
+                "https://identity.example.test/realms/axiom", subject);
+        TenantMembership membership = identityService.createMembership(tenantA.id(), identity.id(), Set.of());
+
+        assertThat(identityService.hasActiveMembership(tenantA.id(), identity.id())).isTrue();
+        assertThat(identityService.hasActiveMembership(tenantB.id(), identity.id())).isFalse();
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+            jdbcTemplate.queryForObject("SELECT set_config('axiom.tenant_id', ?, true)",
+                    String.class, tenantA.id().toString());
+            jdbcTemplate.update("""
+                    UPDATE axiom.tenant_membership
+                    SET status = 'SUSPENDED'
+                    WHERE tenant_id = ? AND id = ?
+                    """, tenantA.id(), membership.id());
+        });
+        assertThat(identityService.hasActiveMembership(tenantA.id(), identity.id())).isFalse();
+
+        IdentityUser disabledIdentity = identityService.registerIdentity(
+                "https://identity.example.test/realms/axiom", "disabled-" + UUID.randomUUID());
+        identityService.createMembership(tenantB.id(), disabledIdentity.id(), Set.of());
+        jdbcTemplate.update("UPDATE axiom.user_identity SET status = 'DISABLED' WHERE id = ?",
+                disabledIdentity.id());
+        assertThat(identityService.hasActiveMembership(tenantB.id(), disabledIdentity.id())).isFalse();
     }
 
     @Test
