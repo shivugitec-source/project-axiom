@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
 
+import io.projectaxiom.common.TenantContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,7 +56,8 @@ public class OrganizationService {
     }
 
     private void establishTenant(UUID tenantId) {
-        jdbc.queryForObject("SELECT set_config('axiom.tenant_id', ?, true)", String.class, tenantId.toString());
+        UUID effectiveTenantId = TenantContext.requireMatchingTenant(tenantId);
+        jdbc.queryForObject("SELECT set_config('axiom.tenant_id', ?, true)", String.class, effectiveTenantId.toString());
     }
 
     private Organization mapOrganization(ResultSet rs) throws SQLException {

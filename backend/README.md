@@ -59,7 +59,9 @@ The security configuration reads these exact environment variable names directly
 - Health, info and the system-information endpoint are public. Other endpoints require a valid bearer token once OIDC is configured.
 - The explicit `local` profile remains a development-only bypass for the existing local endpoints when OIDC is not configured. Never enable it in production.
 
-**Important:** this increment establishes token authentication only. It does not yet map the validated `(iss, sub)` pair to `axiom.user_identity`, select a tenant membership, authorize tenant permissions, or derive a tenant context for database RLS. A caller-supplied tenant ID is still not proof of authorization, and tenant-controlled APIs remain local-profile only until those steps are implemented.
+**Tenant selection:** for OIDC-authenticated requests, an optional `X-Tenant-ID` UUID selects the tenant. The request filter checks that the authenticated Axiom identity has an ACTIVE membership in that tenant before binding a request-scoped tenant context. Tenant-aware business services reject a path/service tenant ID that differs from the verified context and set `axiom.tenant_id` transaction-locally before accessing RLS-protected rows. The context is cleared at the end of the request. The header is a selector, never proof of authorization.
+
+**Important:** this increment establishes membership-verified tenant context, but does not yet enforce tenant permissions at HTTP endpoints. Tenant-controlled controllers remain local-profile only until permission enforcement is complete.
 
 Check:
 - http://localhost:8080/actuator/health

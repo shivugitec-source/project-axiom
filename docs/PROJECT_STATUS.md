@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, OIDC configuration hardening, provider-neutral identity mapping and active tenant-membership verification are merged. Request-scoped RLS context and permission enforcement remain incomplete.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping and active membership verification are merged. Membership-verified request tenant context is under review; HTTP permission enforcement remains incomplete.
 
 ## Completed foundations
 
@@ -76,13 +76,25 @@
 - This is a reusable authorization primitive only. No HTTP tenant context filter, tenant permission enforcement or production tenant endpoint is enabled in this slice.
 - Tenant-controlled controllers remain local-profile only.
 
+### Sprint IAM-5 — Membership-verified request tenant context (under review)
+- An optional `X-Tenant-ID` request header is parsed as a UUID and checked against the authenticated Axiom identity's active membership.
+- The filter binds a request-scoped tenant context only after membership verification and always clears it after request processing.
+- Tenant-aware Organization, Party and IAM services reject tenant arguments that differ from the verified request context and continue to establish transaction-local PostgreSQL `axiom.tenant_id` for forced RLS.
+- Tenant context is enabled only in the OIDC security chain; local-profile development behavior is unchanged.
+- Added unit tests for context lifecycle, tenant mismatch, malformed selectors, missing membership and request cleanup, plus PostgreSQL integration coverage for service-level tenant mismatch.
+- The initial CI attempt exposed incorrect Spring Security/Spring Web filter imports; corrected in commit `37a2104251c1d9b480c691d56e13f0b9d6d0a4f8`.
+- Push CI run #159 and pull-request CI run #160 both passed on that exact code commit. PostgreSQL 17-backed Maven verification reported BUILD SUCCESS; 26 tests passed with zero failures, errors or skips.
+- A final documentation-only update is being revalidated before merge.
+- Tenant-controlled controllers remain local-profile only; HTTP permission enforcement is not included.
+
 ## Not yet implemented
-- Bind a verified membership to request-scoped transaction-local `axiom.tenant_id`.
-- Enforce tenant-scoped permissions before exposing tenant-controlled APIs in a non-local profile.
+- Enforce tenant-scoped permissions at the HTTP boundary.
+- Enable production tenant-controlled APIs only after permission enforcement and security integration tests.
 
 ## Next implementation sequence
-1. Bind the verified membership to request-scoped transaction-local PostgreSQL RLS context and preserve the restricted database role.
-2. Enforce tenant permissions before enabling production tenant APIs; a path/header tenant identifier alone is never authority.
+1. Add a tenant permission authorization component that checks the verified identity, selected tenant and permission code.
+2. Apply explicit permission requirements to tenant APIs and test allowed/denied behavior against PostgreSQL RLS.
+3. Only then consider enabling selected tenant endpoints outside the local profile.
 
 ## Development rules
 - Keep the modular-monolith architecture.
