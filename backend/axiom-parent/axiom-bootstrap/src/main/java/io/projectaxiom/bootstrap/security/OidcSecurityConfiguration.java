@@ -1,5 +1,7 @@
 package io.projectaxiom.bootstrap.security;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -28,7 +30,8 @@ public class OidcSecurityConfiguration {
             HttpSecurity http,
             Environment environment,
             AxiomJwtAuthenticationConverter authenticationConverter,
-            IdentityService identityService) throws Exception {
+            IdentityService identityService,
+            @Qualifier("axiomJwtDecoder") ObjectProvider<JwtDecoder> jwtDecoderProvider) throws Exception {
         OidcSettings oidc = resolveOidcSettings(environment);
         boolean localProfile = environment.acceptsProfiles(Profiles.of("local"));
 
@@ -50,10 +53,7 @@ public class OidcSecurityConfiguration {
 
         if (oidc.configured()) {
             http.addFilterAfter(new TenantContextFilter(identityService), BearerTokenAuthenticationFilter.class);
-            NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(oidc.issuerUri()).build();
-            decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<Jwt>(
-                    JwtValidators.createDefaultWithIssuer(oidc.issuerUri()),
-                    new AudienceValidator(oidc.audience())));
+            JwtDecoder decoder = jwtDecoderProvider.getIfAvailable(() -> createJwtDecoder(oidc));
             http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
                     .decoder(decoder)
                     .jwtAuthenticationConverter(authenticationConverter)));
@@ -61,6 +61,14 @@ public class OidcSecurityConfiguration {
         return http.build();
     }
 
+
+    private static JwtDecoder createJwtDecoder(OidcSettings oidc) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(oidc.issuerUri()).build();
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<Jwt>(
+                JwtValidators.createDefaultWithIssuer(oidc.issuerUri()),
+                new AudienceValidator(oidc.audience())));
+        return decoder;
+    }
 
     static OidcSettings resolveOidcSettings(Environment environment) {
         return new OidcSettings(

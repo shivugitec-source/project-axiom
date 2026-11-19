@@ -99,14 +99,21 @@
 - Push CI run #170 and PR CI run #171 passed on exact PR head `1fe4b589d0898736eff1c60b47f691b1bebcebe7`; PostgreSQL 17-backed Maven verification reported BUILD SUCCESS with 32 tests and zero failures, errors or skips.
 - PR #14 was squash-merged as `c72b616247de39fa6c5ea26eb717f33f02e6cf66`; main CI run #172 passed on that exact merge commit with the same 32-test result.
 
+### Sprint IAM-7 — End-to-end OIDC tenant authorization tests (under review)
+- Make the resource-server decoder injectable while retaining the production Nimbus issuer-discovery decoder and issuer/time/audience validators as the default.
+- Add a test-only decoder and HTTP integration coverage for bearer authentication, OIDC identity mapping, active tenant membership, `X-Tenant-ID` context, method-level permission checks and PostgreSQL forced RLS.
+- Verify an authorized `party:read` request succeeds and requests with no token, no tenant selector, a mismatched tenant, no active membership or no `party:read` grant are denied.
+- Keep Organization and Party controllers local-profile only; no production tenant API exposure is included.
+- PostgreSQL-backed CI validation is pending.
+
 ## Not yet implemented
-- Complete end-to-end HTTP security integration tests with OIDC authentication, verified tenant context and PostgreSQL-backed permission grants.
 - Authorize platform-level tenant provisioning separately.
-- Enable selected tenant-controlled APIs only after those tests pass; keep the local-profile restriction until then.
+- Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
+- Enable selected tenant-controlled APIs only after end-to-end security tests and platform authorization are complete.
 
 ## Next implementation sequence
-1. Complete end-to-end HTTP authorization tests for OIDC, tenant selection, method permissions and forced RLS.
-2. Define platform-level authorization for tenant provisioning.
+1. Define platform-level authorization and approval rules for tenant provisioning.
+2. Review production OIDC issuer/audience configuration and operational readiness.
 3. Only then consider enabling selected tenant endpoints outside the local profile.
 
 ## Development rules
