@@ -140,6 +140,30 @@ public class IdentityService {
         return findMembership(tenantId, membershipId);
     }
 
+    /**
+     * Checks membership only within the requested tenant's RLS scope.
+     * Both the membership and global identity must remain active.
+     */
+    @Transactional(readOnly = true)
+    public boolean hasActiveMembership(UUID tenantId, UUID identityId) {
+        if (tenantId == null || identityId == null) {
+            throw new IllegalArgumentException("tenantId and identityId are required");
+        }
+        establishTenant(tenantId);
+        Boolean active = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM axiom.tenant_membership m
+                    JOIN axiom.user_identity i ON i.id = m.identity_id
+                    WHERE m.tenant_id = ?
+                      AND m.identity_id = ?
+                      AND m.status = 'ACTIVE'
+                      AND i.status = 'ACTIVE'
+                )
+                """, Boolean.class, tenantId, identityId);
+        return Boolean.TRUE.equals(active);
+    }
+
     @Transactional(readOnly = true)
     public List<IamPermission> listPermissions() {
         return jdbc.query("""
