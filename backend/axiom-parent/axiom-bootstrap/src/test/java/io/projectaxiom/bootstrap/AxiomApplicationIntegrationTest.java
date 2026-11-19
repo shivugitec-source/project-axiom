@@ -4,9 +4,12 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
+import io.projectaxiom.bootstrap.security.AxiomAuthenticationToken;
+import io.projectaxiom.bootstrap.security.AxiomJwtAuthenticationConverter;
 import io.projectaxiom.identity.IdentityService;
 import io.projectaxiom.identity.IdentityUser;
 import io.projectaxiom.identity.TenantMembership;
@@ -25,6 +28,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,6 +52,9 @@ class AxiomApplicationIntegrationTest {
 
     @Autowired
     private IdentityService identityService;
+
+    @Autowired
+    private AxiomJwtAuthenticationConverter authenticationConverter;
 
     @Test
     void startsWithPostgresAndAppliesFlywayMigration() {
@@ -74,9 +81,9 @@ class AxiomApplicationIntegrationTest {
         HttpResponse<String> systemResponse = client.send(systemRequest, HttpResponse.BodyHandlers.ofString());
 
         assertThat(systemResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-        assertThat(systemResponse.body()).contains("\"name\":\"Project Axiom\"");
-        assertThat(systemResponse.body()).contains("\"status\":\"RUNNING\"");
-        assertThat(systemResponse.body()).contains("\"timestamp\"");
+        assertThat(systemResponse.body()).contains("\\"name\\":\\"Project Axiom\\"");
+        assertThat(systemResponse.body()).contains("\\"status\\":\\"RUNNING\\"");
+        assertThat(systemResponse.body()).contains("\\"timestamp\\"");
 
         HttpRequest healthRequest = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/actuator/health"))
@@ -84,7 +91,7 @@ class AxiomApplicationIntegrationTest {
         HttpResponse<String> healthResponse = client.send(healthRequest, HttpResponse.BodyHandlers.ofString());
 
         assertThat(healthResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-        assertThat(healthResponse.body()).contains("\"status\":\"UP\"");
+        assertThat(healthResponse.body()).contains("\\"status\\":\\"UP\\"");
     }
 
     @Test
@@ -166,6 +173,40 @@ class AxiomApplicationIntegrationTest {
                 .isInstanceOf(org.springframework.dao.EmptyResultDataAccessException.class);
         assertThat(identityService.listPermissions())
                 .extracting("code").contains("organization:read", "party:manage", "user:manage", "role:manage");
+    }
+
+    @Test
+    void oidcSubjectMapsToStableGlobalIdentity() {
+        String issuer = "https://identity.example.test/realms/axiom";
+        String subject = "integration-" + UUID.randomUUID();
+        Jwt token = Jwt.withTokenValue("validated-test-token")
+                .header("alg", "RS256")
+                .issuer(issuer)
+                .subject(subject)
+                .issuedAt(Instant.parse("2026-01-01T00:00:00Z"))
+                .expiresAt(Instant.parse("2030-01-01T00:00:00Z"))
+                .build();
+
+        AxiomAuthenticationToken authentication = authenticationConverter.convert(token);
+        IdentityUser stored = identityService.registerIdentity(issuer, subject);
+
+        assertThat(authentication.isAuthenticated()).isTrue();
+        assertThat(authentication.getPrincipal().identityId()).isEqualTo(stored.id());
+        assertThat(authentication.getPrincipal().issuer()).isEqualTo(issuer);
+        assertThat(authentication.getPrincipal().subject()).isEqualTo(subject);
+        assertThat(authentication.getAuthorities()).isEmpty();
+
+        Jwt sameSubjectFromOtherIssuer = Jwt.withTokenValue("other-validated-test-token")
+                .header("alg", "RS256")
+                .issuer("https://other-identity.example.test/realms/axiom")
+                .subject(subject)
+                .issuedAt(Instant.parse("2026-01-01T00:00:00Z"))
+                .expiresAt(Instant.parse("2030-01-01T00:00:00Z"))
+                .build();
+        AxiomAuthenticationToken otherIssuerAuthentication =
+                authenticationConverter.convert(sameSubjectFromOtherIssuer);
+
+        assertThat(otherIssuerAuthentication.getPrincipal().identityId()).isNotEqualTo(stored.id());
     }
 
     @Test
