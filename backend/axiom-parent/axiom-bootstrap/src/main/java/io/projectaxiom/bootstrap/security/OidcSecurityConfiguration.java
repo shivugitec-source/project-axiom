@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -20,6 +21,7 @@ import io.projectaxiom.identity.IdentityService;
  * standard JWT time constraints, and the API's required audience.
  */
 @Configuration
+@EnableMethodSecurity
 public class OidcSecurityConfiguration {
     @Bean
     SecurityFilterChain axiomSecurityFilterChain(

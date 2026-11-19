@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification and membership-verified request tenant context are merged. HTTP permission enforcement remains incomplete.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification and membership-verified request tenant context are merged. Tenant permission enforcement is under review; tenant controllers remain local-profile only.
 
 ## Completed foundations
 
@@ -88,13 +88,23 @@
 - PostgreSQL 17-backed Maven verification used the restricted non-superuser application role; BUILD SUCCESS, 26 tests, zero failures, errors or skips.
 - Tenant-controlled controllers remain local-profile only; HTTP permission enforcement is not included.
 
+### Sprint IAM-6 — Tenant permission authorization (under review)
+- Add a method-security authorization component that requires an authenticated `AxiomPrincipal`, a non-null verified request tenant matching the controller tenant argument, and the requested permission granted by that tenant's active membership roles.
+- Enable Spring method security and declare explicit `organization:read`, `organization:manage`, `party:read` and `party:manage` requirements on the tenant-aware controller methods.
+- Keep tenant creation platform-level and local-development-only until platform provisioning authorization is designed.
+- Preserve the local development bypass only when the `local` profile is active and OIDC is not configured; OIDC-configured requests must pass permission checks even under the local profile.
+- Add unit tests for fail-closed behavior and an integration test that exercises method security against PostgreSQL-backed tenant role grants and forced RLS.
+- Tenant controllers remain `@Profile("local")`; this slice does not enable production tenant APIs.
+- PostgreSQL-backed CI validation is pending.
+
 ## Not yet implemented
-- Enforce tenant-scoped permissions at the HTTP boundary.
-- Enable production tenant-controlled APIs only after permission enforcement and security integration tests.
+- Complete end-to-end HTTP security integration tests with OIDC authentication, verified tenant context and PostgreSQL-backed permission grants.
+- Authorize platform-level tenant provisioning separately.
+- Enable selected tenant-controlled APIs only after those tests pass; keep the local-profile restriction until then.
 
 ## Next implementation sequence
-1. Add a tenant permission authorization component that checks the verified identity, selected tenant and permission code.
-2. Apply explicit permission requirements to tenant APIs and test allowed/denied behavior against PostgreSQL RLS.
+1. Complete end-to-end HTTP authorization tests for OIDC, tenant selection, method permissions and forced RLS.
+2. Define platform-level authorization for tenant provisioning.
 3. Only then consider enabling selected tenant endpoints outside the local profile.
 
 ## Development rules
