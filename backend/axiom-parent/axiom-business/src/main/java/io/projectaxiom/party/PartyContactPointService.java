@@ -38,7 +38,7 @@ public class PartyContactPointService {
                 SELECT id, tenant_id, party_id, contact_type, contact_value, label, created_at
                 FROM axiom.party_contact_point
                 WHERE tenant_id = ? AND party_id = ?
-                ORDER BY created_at, id
+                ORDER BY contact_type, created_at, id
                 """, this::map, tenantId, partyId);
     }
 
