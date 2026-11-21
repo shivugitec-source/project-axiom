@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement and end-to-end HTTP/OIDC security tests are merged. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement and end-to-end HTTP/OIDC security tests are merged. Party contact-point slice is under review. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
 
 ## Completed foundations
 
@@ -124,3 +124,18 @@
 - Keep business rules in their owning modules; bootstrap is wiring and runtime configuration.
 - Never commit production secrets. Compose defaults are local-development only.
 - Never treat a caller-supplied tenant ID as proof of authorization.
+
+
+### Sprint P-2 — Party contact points (under review)
+- Add tenant-owned EMAIL and PHONE contact points linked to a Party; this is a separate capability and does not expand Party identity or role semantics.
+- Flyway V5 creates `axiom.party_contact_point` with a tenant-consistent composite foreign key to Party, constrained contact type, nonblank value, lookup index and forced RLS.
+- Add PartyContactPoint domain record, tenant-scoped JDBC service and local-profile API to add/list contact points. API operations reuse the existing `party:manage` and `party:read` permissions.
+- Contact values are stored as supplied after trimming; this slice does not claim email/phone ownership verification, normalization, uniqueness, or consent management.
+- PostgreSQL integration coverage checks forced RLS, tenant isolation, cross-tenant party binding rejection, and EMAIL/PHONE persistence.
+- Branch: `feature/party-contact-points`. CI validation is pending; do not merge until the exact PR head passes PostgreSQL-backed CI and the diff is reviewed.
+- Tenant controllers remain local-profile only. No production endpoint exposure is added.
+
+## Next implementation sequence
+1. Complete review and CI validation of Party contact points.
+2. Define platform-level authorization and approval rules for tenant provisioning before implementing platform tenant creation.
+3. Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
