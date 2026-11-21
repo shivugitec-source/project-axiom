@@ -18,7 +18,10 @@ import io.projectaxiom.identity.TenantRole;
 import io.projectaxiom.organization.Organization;
 import io.projectaxiom.organization.OrganizationService;
 import io.projectaxiom.organization.Tenant;
+import io.projectaxiom.party.ContactPointType;
 import io.projectaxiom.party.Party;
+import io.projectaxiom.party.PartyContactPoint;
+import io.projectaxiom.party.PartyContactPointService;
 import io.projectaxiom.party.PartyRole;
 import io.projectaxiom.party.PartyService;
 import io.projectaxiom.party.PartyType;
@@ -57,6 +60,9 @@ class AxiomApplicationIntegrationTest {
     private PartyService partyService;
 
     @Autowired
+    private PartyContactPointService partyContactPointService;
+
+    @Autowired
     private IdentityService identityService;
 
     @Autowired
@@ -69,7 +75,7 @@ class AxiomApplicationIntegrationTest {
                 Integer.class);
         assertThat(schemaCount).isEqualTo(1);
 
-        for (String version : Set.of("1", "2", "3", "4")) {
+        for (String version : Set.of("1", "2", "3", "4", "5")) {
             Integer migrationCount = jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = ? AND success = true",
                     Integer.class, version);
@@ -257,6 +263,40 @@ class AxiomApplicationIntegrationTest {
             assertThat(organizationService.listOrganizations(verifiedTenant.id())).isEmpty();
         }
         assertThat(TenantContext.currentTenantId()).isNull();
+    }
+
+    @Test
+    void partyContactPointsAreTenantIsolatedAndPartyBound() {
+        Boolean forcedRls = jdbcTemplate.queryForObject("""
+                SELECT relrowsecurity AND relforcerowsecurity
+                FROM pg_class
+                WHERE oid = 'axiom.party_contact_point'::regclass
+                """, Boolean.class);
+        assertThat(forcedRls).isTrue();
+
+        Tenant tenantA = organizationService.createTenant("CONTACT_TENANT_A", "Contact Tenant A");
+        Tenant tenantB = organizationService.createTenant("CONTACT_TENANT_B", "Contact Tenant B");
+        Party partyA = partyService.createParty(tenantA.id(), PartyType.ORGANIZATION,
+                "Contact Party A", Set.of(PartyRole.CUSTOMER));
+        Party partyB = partyService.createParty(tenantB.id(), PartyType.ORGANIZATION,
+                "Contact Party B", Set.of(PartyRole.SUPPLIER));
+
+        PartyContactPoint email = partyContactPointService.add(
+                tenantA.id(), partyA.id(), ContactPointType.EMAIL, " sales@example.test ", "Sales");
+        PartyContactPoint phone = partyContactPointService.add(
+                tenantA.id(), partyA.id(), ContactPointType.PHONE, "+91 80000 00000", "Office");
+
+        assertThat(email.value()).isEqualTo("sales@example.test");
+        assertThat(email.label()).isEqualTo("Sales");
+        assertThat(partyContactPointService.list(tenantA.id(), partyA.id()))
+                .extracting(PartyContactPoint::type)
+                .containsExactly(ContactPointType.EMAIL, ContactPointType.PHONE);
+        assertThat(partyContactPointService.list(tenantB.id(), partyB.id())).isEmpty();
+        assertThat(partyContactPointService.list(tenantB.id(), partyA.id())).isEmpty();
+
+        assertThatThrownBy(() -> partyContactPointService.add(
+                tenantB.id(), partyA.id(), ContactPointType.EMAIL, "cross-tenant@example.test", null))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
