@@ -267,3 +267,10 @@
 - Hardened the OIDC tenant-context filter to enumerate all `X-Tenant-ID` header values instead of reading only the first value. A request with multiple values is rejected with HTTP 400 before membership lookup; an explicitly present but blank value is also rejected rather than treated as an absent selector.
 - Added regression tests for duplicate and blank header values and asserted that neither request reaches tenant membership verification or the downstream filter chain.
 - This closes a request-parsing ambiguity at the tenant boundary without changing valid single-UUID selection, membership authorization, RLS behavior, database schema or API permissions.
+
+
+### Engineering E-17 — Enforce tenant-context scope thread ownership
+- Bound each `TenantContext.Scope` to the thread that opened it. A close attempt from another thread now fails fast without marking the scope closed, allowing the owning thread to perform the cleanup.
+- Added a regression test that attempts cross-thread closure, verifies the original thread still has its tenant context, then closes the scope on its owner and verifies cleanup.
+- Documented that the ThreadLocal tenant context is not implicitly propagated to asynchronous work; each executing thread must establish and close its own verified context.
+- This is a defensive lifecycle invariant for the existing request-scoped context. It does not change tenant selection, membership authorization, PostgreSQL RLS, migrations, database grants or API permissions.

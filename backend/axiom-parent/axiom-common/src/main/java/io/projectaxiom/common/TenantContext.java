@@ -39,6 +39,7 @@ public final class TenantContext {
     }
 
     public static final class Scope implements AutoCloseable {
+        private final Thread ownerThread = Thread.currentThread();
         private boolean closed;
 
         private Scope() {
@@ -46,6 +47,9 @@ public final class TenantContext {
 
         @Override
         public void close() {
+            if (Thread.currentThread() != ownerThread) {
+                throw new IllegalStateException("Tenant context scope must be closed by its owning thread");
+            }
             if (!closed) {
                 CURRENT.remove();
                 closed = true;
