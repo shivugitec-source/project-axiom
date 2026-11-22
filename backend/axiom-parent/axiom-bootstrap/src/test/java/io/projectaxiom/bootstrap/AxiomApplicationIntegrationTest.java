@@ -47,7 +47,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AxiomApplicationIntegrationTest {
 
     private static final String EXPECTED_TENANT_POLICY_EXPRESSION =
-            "tenant_id=NULLIFcurrent_setting'axiom.tenant_id',true,''";
+            "tenant_id=nullifcurrent_setting'axiom.tenant_id',true,''";
 
     private record RlsPolicy(
             String name, String permissive, String command, String usingExpression, String checkExpression) {
