@@ -348,6 +348,17 @@ class AxiomApplicationIntegrationTest {
                 "tenant_role");
 
         for (String table : tenantTables) {
+            Boolean tenantIdNotNull = jdbcTemplate.queryForObject("""
+                    SELECT is_nullable = 'NO'
+                    FROM information_schema.columns
+                    WHERE table_schema = 'axiom'
+                      AND table_name = ?
+                      AND column_name = 'tenant_id'
+                    """, Boolean.class, table);
+            assertThat(tenantIdNotNull)
+                    .as(table + " tenant_id must be NOT NULL")
+                    .isTrue();
+
             Boolean forcedRls = jdbcTemplate.queryForObject("""
                     SELECT c.relrowsecurity AND c.relforcerowsecurity
                     FROM pg_class c
@@ -390,6 +401,61 @@ class AxiomApplicationIntegrationTest {
                     .as(table + " WITH CHECK must compare tenant_id to the transaction tenant")
                     .isEqualTo(EXPECTED_TENANT_POLICY_EXPRESSION);
         }
+    }
+
+    @Test
+    void foreignKeysToTenantOwnedTablesPreserveTenantId() {
+        List<String> unsafeForeignKeys = jdbcTemplate.queryForList("""
+                SELECT format(
+                    '%I.%I -> %I.%I (%I)',
+                    source_schema.nspname,
+                    source_table.relname,
+                    target_schema.nspname,
+                    target_table.relname,
+                    constraint_row.conname
+                )
+                FROM pg_constraint constraint_row
+                JOIN pg_class source_table ON source_table.oid = constraint_row.conrelid
+                JOIN pg_namespace source_schema ON source_schema.oid = source_table.relnamespace
+                JOIN pg_class target_table ON target_table.oid = constraint_row.confrelid
+                JOIN pg_namespace target_schema ON target_schema.oid = target_table.relnamespace
+                WHERE constraint_row.contype = 'f'
+                  AND source_schema.nspname = 'axiom'
+                  AND target_schema.nspname = 'axiom'
+                  AND EXISTS (
+                      SELECT 1
+                      FROM pg_attribute target_tenant_column
+                      WHERE target_tenant_column.attrelid = target_table.oid
+                        AND target_tenant_column.attname = 'tenant_id'
+                        AND target_tenant_column.attnum > 0
+                        AND NOT target_tenant_column.attisdropped
+                  )
+                  AND (
+                      NOT EXISTS (
+                          SELECT 1
+                          FROM unnest(constraint_row.conkey) AS source_key(attnum)
+                          JOIN pg_attribute source_column
+                            ON source_column.attrelid = source_table.oid
+                           AND source_column.attnum = source_key.attnum
+                          WHERE source_column.attname = 'tenant_id'
+                            AND NOT source_column.attisdropped
+                      )
+                      OR NOT EXISTS (
+                          SELECT 1
+                          FROM unnest(constraint_row.confkey) AS target_key(attnum)
+                          JOIN pg_attribute target_column
+                            ON target_column.attrelid = target_table.oid
+                           AND target_column.attnum = target_key.attnum
+                          WHERE target_column.attname = 'tenant_id'
+                            AND NOT target_column.attisdropped
+                      )
+                  )
+                ORDER BY source_table.relname, constraint_row.conname
+                """, String.class);
+
+        assertThat(unsafeForeignKeys)
+                .as("foreign keys targeting tenant-owned tables must include tenant_id on both sides to prevent cross-tenant references")
+                .isEmpty();
     }
 
     @Test
