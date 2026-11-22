@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement and end-to-end HTTP/OIDC security tests are merged. Party contact-point slice is under review. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests and Party contact points are merged. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
 
 ## Completed foundations
 
@@ -109,14 +109,9 @@
 - PR #16 was squash-merged as `104e89e1edce581083f72c483d72309abef39e28`; main CI run #181 passed on that exact merge commit with the same 33-test result.
 
 ## Not yet implemented
-- Authorize platform-level tenant provisioning separately.
+- Define and implement platform-level tenant provisioning authorization only after its authority, approval and audit policy is established.
 - Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
-- Enable selected tenant-controlled APIs only after end-to-end security tests and platform authorization are complete.
-
-## Next implementation sequence
-1. Define platform-level authorization and approval rules for tenant provisioning.
-2. Review production OIDC issuer/audience configuration and operational readiness.
-3. Only then consider enabling selected tenant endpoints outside the local profile.
+- Define the next business-domain slice from an explicit domain model/requirements before implementation; the README currently states broad industry goals but does not specify the next entity lifecycle or business rules.
 
 ## Development rules
 - Keep the modular-monolith architecture.
@@ -126,16 +121,17 @@
 - Never treat a caller-supplied tenant ID as proof of authorization.
 
 
-### Sprint P-2 — Party contact points (under review)
+### Sprint P-2 — Party contact points (completed)
 - Add tenant-owned EMAIL and PHONE contact points linked to a Party; this is a separate capability and does not expand Party identity or role semantics.
 - Flyway V5 creates `axiom.party_contact_point` with a tenant-consistent composite foreign key to Party, constrained contact type, nonblank value, lookup index and forced RLS.
 - Add PartyContactPoint domain record, tenant-scoped JDBC service and local-profile API to add/list contact points. API operations reuse the existing `party:manage` and `party:read` permissions.
 - Contact values are stored as supplied after trimming; this slice does not claim email/phone ownership verification, normalization, uniqueness, or consent management.
 - PostgreSQL integration coverage checks forced RLS, tenant isolation, cross-tenant party binding rejection, and EMAIL/PHONE persistence.
-- Branch: `feature/party-contact-points`. CI validation is pending; do not merge until the exact PR head passes PostgreSQL-backed CI and the diff is reviewed.
+- PR #18 was squash-merged as `13b766dcb12e08457ec56496f8dacb52c54f2df7` after PR CI #193 passed on exact head `d8e4bc920f62d249a7130684cb706c8854e12947`.
+- Main CI #194 passed on merge commit `13b766dcb12e08457ec56496f8dacb52c54f2df7`.
 - Tenant controllers remain local-profile only. No production endpoint exposure is added.
 
 ## Next implementation sequence
-1. Complete review and CI validation of Party contact points.
+1. Select and document the next business-domain capability and its lifecycle, invariants and API contract, independent of platform tenant provisioning.
 2. Define platform-level authorization and approval rules for tenant provisioning before implementing platform tenant creation.
 3. Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
