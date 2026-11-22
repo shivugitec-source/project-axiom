@@ -85,6 +85,33 @@ class AxiomApplicationIntegrationTest {
     }
 
     @Test
+    void applicationDatabaseRoleIsRestrictedAndCannotBypassRls() {
+        Boolean restrictedRole = jdbcTemplate.queryForObject("""
+                SELECT rolcanlogin
+                    AND NOT rolsuper
+                    AND NOT rolcreaterole
+                    AND NOT rolcreatedb
+                    AND NOT rolreplication
+                    AND NOT rolbypassrls
+                    AND NOT rolinherit
+                FROM pg_roles
+                WHERE rolname = current_user
+                """, Boolean.class);
+
+        assertThat(restrictedRole)
+                .as("application database role must be a login without administrative or RLS-bypass attributes")
+                .isTrue();
+
+        Boolean requiredDatabasePrivileges = jdbcTemplate.queryForObject("""
+                SELECT has_database_privilege(current_user, current_database(), 'CONNECT')
+                    AND has_database_privilege(current_user, current_database(), 'CREATE')
+                """, Boolean.class);
+        assertThat(requiredDatabasePrivileges)
+                .as("application role must retain only the database access needed for connection and Flyway schema creation")
+                .isTrue();
+    }
+
+    @Test
     void everyTenantOwnedTableHasForcedTenantScopedRlsPolicies() {
         List<String> tenantTables = jdbcTemplate.queryForList("""
                 SELECT DISTINCT table_name
