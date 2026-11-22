@@ -26,10 +26,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
-    env:
-      AXIOM_DB_URL: jdbc:postgresql://localhost:5432/axiom
-      AXIOM_DB_USERNAME: axiom_app
-      AXIOM_DB_PASSWORD: axiom_ci_password
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -67,4 +63,8 @@ jobs:
           AXIOM_MIGRATION_DB_PASSWORD: axiom_ci_migration_password
         run: java -jar backend/axiom-parent/axiom-migrator/target/axiom-migrator-0.1.0-SNAPSHOT.jar
       - name: Verify backend with runtime credentials only
+        env:
+          AXIOM_DB_URL: jdbc:postgresql://localhost:5432/axiom
+          AXIOM_DB_USERNAME: axiom_app
+          AXIOM_DB_PASSWORD: axiom_ci_password
         run: mvn -B -ntp verify -f backend/axiom-parent/pom.xml
