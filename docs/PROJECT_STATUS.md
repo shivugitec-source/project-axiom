@@ -238,3 +238,8 @@
 2. Select the next business-domain capability only when its lifecycle, invariants and API contract are supported by documented requirements. The current README lists target industries but does not define their business rules; do not invent a domain slice.
 3. Define platform-level tenant-provisioning authorization, including authority, approval and audit requirements, before implementing tenant creation.
 4. Review real production OIDC issuer/audience configuration and operational readiness before any production tenant API exposure.
+
+### Engineering E-12 — Verify tenant RLS policy applicability to the runtime role
+- Extended the PostgreSQL catalog invariant to inspect `pg_policies.roles` and require the single approved tenant-isolation policy to apply to `axiom_app`, either directly or through `PUBLIC`. A correct predicate attached only to a different role is no longer accepted as sufficient runtime protection.
+- PR #48 was squash-merged as `464a06d5ee70deaf1de1ecbbd946ad8ff4f7d27e` after exact-head push CI #302 and PR CI #303 passed on `6884b7e1a208e1ebecaf8d0dc7e3510f94ad30d3`.
+- Main CI #304 passed on merge commit `464a06d5ee70deaf1de1ecbbd946ad8ff4f7d27e`. PostgreSQL-backed verification reported 39 Python regression tests, 14 tenant/RLS integration tests, successful Maven `BUILD SUCCESS`, and zero test failures, errors or skips.
