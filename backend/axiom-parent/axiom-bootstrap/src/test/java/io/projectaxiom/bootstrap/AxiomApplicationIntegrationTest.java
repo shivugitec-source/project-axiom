@@ -137,6 +137,7 @@ class AxiomApplicationIntegrationTest {
                     AND NOT rolreplication
                     AND NOT rolbypassrls
                     AND NOT rolinherit
+                    AND NOT has_database_privilege('axiom_migrator', current_database(), 'CREATE')
                 FROM pg_roles
                 WHERE rolname = 'axiom_migrator'
                 """, Boolean.class);
@@ -206,6 +207,13 @@ class AxiomApplicationIntegrationTest {
         assertThat(migrationRoleHasNoMemberships)
                 .as("migration role must not inherit or SET ROLE to another role")
                 .isTrue();
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+            assertThatThrownBy(() -> jdbcTemplate.execute(
+                    "ALTER TABLE axiom.party DISABLE ROW LEVEL SECURITY"))
+                    .isInstanceOf(org.springframework.dao.DataAccessException.class);
+            transaction.setRollbackOnly();
+        });
     }
 
     @Test
