@@ -128,6 +128,11 @@ class VerifyModuleDependenciesTests(unittest.TestCase):
         )
         self.assertEqual([], verifier.verify_repository(self.root))
 
+    def test_migrator_cannot_depend_on_api_or_bootstrap(self) -> None:
+        self.write_fixture(module_dependencies={"axiom-migrator": ["axiom-bootstrap"]})
+        errors = verifier.verify_repository(self.root)
+        self.assertTrue(any("axiom-migrator" in error for error in errors))
+
     def test_reverse_dependency_fails(self) -> None:
         self.write_fixture(module_dependencies={"axiom-common": ["axiom-core"]})
         errors = verifier.verify_repository(self.root)
