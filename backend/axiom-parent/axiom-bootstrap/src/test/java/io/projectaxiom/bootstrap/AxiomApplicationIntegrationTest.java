@@ -4,11 +4,17 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+
+import javax.sql.DataSource;
 
 import io.projectaxiom.bootstrap.security.AxiomAuthenticationToken;
 import io.projectaxiom.bootstrap.security.AxiomJwtAuthenticationConverter;
@@ -68,6 +74,9 @@ class AxiomApplicationIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private DataSource dataSource;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -490,6 +499,58 @@ class AxiomApplicationIntegrationTest {
                             + ".fk_source_position_fixture -> " + temporarySchema
                             + ".fk_target_position_fixture (fk_source_position_fixture_target)");
         });
+    }
+
+    @Test
+    void transactionLocalTenantSettingIsClearedAfterCommitAndRollbackOnSameConnection() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        Tenant tenant = organizationService.createTenant(
+                "RLS_SCOPE_" + suffix.substring(0, 12), "RLS Scope " + suffix);
+        partyService.createParty(tenant.id(), PartyType.ORGANIZATION, "Scoped Party " + suffix, Set.of());
+
+        try (Connection connection = dataSource.getConnection()) {
+            boolean originalAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                setTenantOnConnection(connection, tenant.id());
+                assertThat(visiblePartyCount(connection)).isEqualTo(1);
+
+                connection.commit();
+                assertThat(visiblePartyCount(connection))
+                        .as("a committed transaction must not leave its tenant setting on the pooled connection")
+                        .isZero();
+
+                setTenantOnConnection(connection, tenant.id());
+                assertThat(visiblePartyCount(connection)).isEqualTo(1);
+
+                connection.rollback();
+                assertThat(visiblePartyCount(connection))
+                        .as("a rolled-back transaction must not leave its tenant setting on the pooled connection")
+                        .isZero();
+            } finally {
+                connection.rollback();
+                connection.setAutoCommit(originalAutoCommit);
+            }
+        }
+    }
+
+    private static void setTenantOnConnection(Connection connection, UUID tenantId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT set_config('axiom.tenant_id', ?, true)")) {
+            statement.setString(1, tenantId.toString());
+            try (ResultSet result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString(1)).isEqualTo(tenantId.toString());
+            }
+        }
+    }
+
+    private static long visiblePartyCount(Connection connection) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT COUNT(*) FROM axiom.party");
+             ResultSet result = statement.executeQuery()) {
+            assertThat(result.next()).isTrue();
+            return result.getLong(1);
+        }
     }
 
     @Test
