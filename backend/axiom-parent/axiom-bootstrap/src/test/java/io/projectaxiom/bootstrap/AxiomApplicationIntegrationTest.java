@@ -102,6 +102,19 @@ class AxiomApplicationIntegrationTest {
                 .as("application database role must be a login without administrative or RLS-bypass attributes")
                 .isTrue();
 
+        Boolean hasRoleMembership = jdbcTemplate.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_auth_members
+                    WHERE member = (
+                        SELECT oid FROM pg_roles WHERE rolname = current_user
+                    )
+                )
+                """, Boolean.class);
+        assertThat(hasRoleMembership)
+                .as("application role must not be able to SET ROLE to another database role")
+                .isFalse();
+
         Boolean requiredDatabasePrivileges = jdbcTemplate.queryForObject("""
                 SELECT has_database_privilege(current_user, current_database(), 'CONNECT')
                     AND has_database_privilege(current_user, current_database(), 'CREATE')
