@@ -135,8 +135,8 @@
 - Main CI #216 passed on merge commit `532cd0b20084f4fc638e644d25cb5c844740fac4` with the same 36-test result.
 - PR #28 was squash-merged as `7ff9d3aca61e2b0a0f93731c00defa18640b98d2` after PR CI #219 passed on exact head `57cddf03eded2eb1a7daec72be2633dbee0940fa`; the integration invariant also rejects direct membership in another PostgreSQL role, preventing `SET ROLE` privilege escalation.
 - Main CI #220 passed on merge commit `7ff9d3aca61e2b0a0f93731c00defa18640b98d2`; PostgreSQL 17-backed Maven verification reported 36 tests with zero failures, errors or skips and `BUILD SUCCESS`.
-- Security limitation identified during review: `application.yml` does not configure separate Flyway credentials, so Flyway currently uses the application datasource identity. That identity creates and owns the schema objects and can therefore perform DDL, including changing table policies; the role-attribute and membership assertions do not remove this ownership capability.
-- Required follow-up: separate a migration-owner identity from the runtime login, grant runtime only schema usage and required DML, and add PostgreSQL tests proving the runtime role does not own tenant tables and cannot perform schema/table DDL. Do not describe the current role as fully unable to alter RLS.
+- At the time of PR #26, the same datasource identity performed Flyway migrations and runtime queries. PR #31 resolves the database-role ownership boundary; see Engineering E-5 for exact evidence.
+- Remaining limitation after PR #31 is process-level: Spring Boot still loads both credential sets for startup Flyway, and the migration identity retains database CREATE because of the immutable V1 schema statement. Do not treat database-role separation as process isolation.
 
 ### Engineering E-5 — Separate Flyway migration owner and runtime database role
 - The Spring datasource now connects as `axiom_app`; Flyway uses the distinct `axiom_migrator` login. The migration identity owns the `axiom` schema and its relations.
