@@ -174,6 +174,8 @@
 - Added 14 standard-library fixture tests for accepted packaging and failure cases. Backend CI now runs the verifier against both built JARs before executing the migrator.
 - PR #37 was squash-merged as `8ddc5d04b05cd804c25924c45a18f02f1bf52c01` after exact-head PR CI #259 passed on `7b42e9eca99024a5d7337d37498620c43b89a8e2`; push CI #258 also passed on that exact head.
 - Main CI #260 passed on merge commit `8ddc5d04b05cd804c25924c45a18f02f1bf52c01`. Verification reported 31 Python regression tests, 44 Maven tests, zero failures/errors/skips and `BUILD SUCCESS`; the packaged-artifact verifier passed, and the standalone migration ran twice before runtime-only API verification.
+- PR #38 recorded the E-8 evidence and deployment-platform dependency; it was squash-merged as `fe3256caa4b50f0269745c95b5fab0736c1cc9d1` after exact-head PR CI #261 passed on `305340590ac7969caa98fa5d2a7d2d0ca9a0d7da`.
+- Main CI #262 passed on merge commit `fe3256caa4b50f0269745c95b5fab0736c1cc9d1`; it again reported 31 Python regression tests and 44 Maven tests with zero failures, errors or skips, plus successful packaged-artifact and double-migration checks.
 
 ## Not yet implemented
 - Integrate the standalone migrator artifact into a production deployment platform. This remains blocked on selecting the platform and its deployment contract: OCI image build/publication target, pre-start Job syntax, secret-manager credential delivery, API startup ordering, retry/backoff behavior and rollout coordination. No production container image or orchestrator-specific Job manifest exists; do not assume Kubernetes or another orchestrator.
