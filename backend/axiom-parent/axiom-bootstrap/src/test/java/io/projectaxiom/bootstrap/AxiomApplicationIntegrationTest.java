@@ -247,10 +247,13 @@ class AxiomApplicationIntegrationTest {
                     WHERE d.defaclrole = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator')
                       AND d.defaclnamespace IN (0, 'axiom'::regnamespace)
                       AND d.defaclobjtype = 'r'
-                      AND acl_entry.grantee IN (
-                          0, (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
+                      AND (
+                          acl_entry.grantee = 0
+                          OR (
+                              acl_entry.grantee = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
+                              AND (acl_entry.privilege_type <> 'SELECT' OR acl_entry.is_grantable)
+                          )
                       )
-                      AND (acl_entry.privilege_type <> 'SELECT' OR acl_entry.is_grantable)
                 )
                 """, Boolean.class);
 
