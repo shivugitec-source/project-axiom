@@ -5,10 +5,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.UUID;
 
 import io.projectaxiom.bootstrap.security.AxiomAuthenticationToken;
@@ -28,7 +26,6 @@ import io.projectaxiom.party.PartyContactPointService;
 import io.projectaxiom.party.PartyRole;
 import io.projectaxiom.party.PartyService;
 import io.projectaxiom.party.PartyType;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -55,9 +52,6 @@ class AxiomApplicationIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private Flyway flyway;
-
-    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @Autowired
@@ -76,16 +70,32 @@ class AxiomApplicationIntegrationTest {
     private AxiomJwtAuthenticationConverter authenticationConverter;
 
     @Test
-    void startsWithPostgresAndAppliesFlywayMigration() {
+    void startsAgainstSchemaPreparedByTheSeparateMigrationProcess() {
         Integer schemaCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = 'axiom'",
                 Integer.class);
         assertThat(schemaCount).isEqualTo(1);
 
-        Set<String> appliedVersions = Arrays.stream(flyway.info().applied())
-                .map(migration -> migration.getVersion().getVersion())
-                .collect(Collectors.toSet());
-        assertThat(appliedVersions).containsExactlyInAnyOrder("1", "2", "3", "4", "5", "6");
+        List<String> migratedTables = jdbcTemplate.queryForList("""
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'axiom'
+                  AND table_type = 'BASE TABLE'
+                  AND table_name <> 'flyway_schema_history'
+                ORDER BY table_name
+                """, String.class);
+        assertThat(migratedTables).containsExactly(
+                "membership_role",
+                "organization",
+                "party",
+                "party_contact_point",
+                "party_role",
+                "permission",
+                "role_permission",
+                "tenant",
+                "tenant_membership",
+                "tenant_role",
+                "user_identity");
     }
 
     @Test
@@ -160,12 +170,13 @@ class AxiomApplicationIntegrationTest {
         assertThat(schemaOwnedByMigrator)
                 .as("migration role must own the schema while runtime receives usage only")
                 .isTrue();
-        Boolean migrationRoleHasRequiredDdl = jdbcTemplate.queryForObject("""
-                SELECT has_database_privilege('axiom_migrator', current_database(), 'CREATE')
+        Boolean migrationRoleHasSchemaOnlyDdl = jdbcTemplate.queryForObject("""
+                SELECT has_database_privilege('axiom_migrator', current_database(), 'CONNECT')
+                    AND NOT has_database_privilege('axiom_migrator', current_database(), 'CREATE')
                     AND has_schema_privilege('axiom_migrator', 'axiom', 'CREATE')
                 """, Boolean.class);
-        assertThat(migrationRoleHasRequiredDdl)
-                .as("only the migration identity receives database/schema CREATE required by the existing V1 schema migration")
+        assertThat(migrationRoleHasSchemaOnlyDdl)
+                .as("migration identity must own the Axiom schema without database-wide CREATE")
                 .isTrue();
 
         Integer runtimeOwnedObjects = jdbcTemplate.queryForObject("""

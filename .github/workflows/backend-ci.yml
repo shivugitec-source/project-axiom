@@ -26,12 +26,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
-    env:
-      AXIOM_DB_URL: jdbc:postgresql://localhost:5432/axiom
-      AXIOM_DB_USERNAME: axiom_app
-      AXIOM_DB_PASSWORD: axiom_ci_password
-      AXIOM_FLYWAY_USERNAME: axiom_migrator
-      AXIOM_FLYWAY_PASSWORD: axiom_ci_migration_password
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -55,11 +49,28 @@ jobs:
           CREATE ROLE axiom_app LOGIN PASSWORD 'axiom_ci_password'
               NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
           GRANT CONNECT ON DATABASE axiom TO axiom_migrator, axiom_app;
-          GRANT CREATE ON DATABASE axiom TO axiom_migrator;
           CREATE SCHEMA axiom AUTHORIZATION axiom_migrator;
           GRANT USAGE ON SCHEMA axiom TO axiom_app;
           ALTER DEFAULT PRIVILEGES FOR ROLE axiom_migrator IN SCHEMA axiom
               GRANT SELECT ON TABLES TO axiom_app;
           SQL
-      - name: Verify backend
-        run: mvn -B -ntp clean verify -f backend/axiom-parent/pom.xml
+      - name: Build the isolated migration artifact
+        run: mvn -B -ntp -DskipTests clean package -f backend/axiom-parent/pom.xml
+      - name: Run Flyway in a dedicated migration process
+        env:
+          AXIOM_MIGRATION_DB_URL: jdbc:postgresql://localhost:5432/axiom
+          AXIOM_MIGRATION_DB_USERNAME: axiom_migrator
+          AXIOM_MIGRATION_DB_PASSWORD: axiom_ci_migration_password
+        run: java -jar backend/axiom-parent/axiom-migrator/target/axiom-migrator-0.1.0-SNAPSHOT.jar
+      - name: Verify migration job is idempotent
+        env:
+          AXIOM_MIGRATION_DB_URL: jdbc:postgresql://localhost:5432/axiom
+          AXIOM_MIGRATION_DB_USERNAME: axiom_migrator
+          AXIOM_MIGRATION_DB_PASSWORD: axiom_ci_migration_password
+        run: java -jar backend/axiom-parent/axiom-migrator/target/axiom-migrator-0.1.0-SNAPSHOT.jar
+      - name: Verify backend with runtime credentials only
+        env:
+          AXIOM_DB_URL: jdbc:postgresql://localhost:5432/axiom
+          AXIOM_DB_USERNAME: axiom_app
+          AXIOM_DB_PASSWORD: axiom_ci_password
+        run: mvn -B -ntp verify -f backend/axiom-parent/pom.xml

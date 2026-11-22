@@ -7,24 +7,32 @@
 - Python 3.10+ (standard library only) for architecture verification
 
 ## Build and test
-Run from the repository root:
+Run from the repository root after starting the local PostgreSQL service (see below). The sequence builds the artifacts, runs migrations as a separate process, then runs the integration suite with runtime credentials only:
 
 ```bash
 python3 backend/verify-module-dependencies.py
 python3 -m unittest discover -s backend/tests -p 'test_*.py' -v
-mvn -B clean verify -f backend/axiom-parent/pom.xml
+mvn -B -DskipTests clean package -f backend/axiom-parent/pom.xml
+AXIOM_MIGRATION_DB_URL=jdbc:postgresql://localhost:5432/axiom \
+AXIOM_MIGRATION_DB_USERNAME=axiom_migrator \
+AXIOM_MIGRATION_DB_PASSWORD=axiom_migrator_dev_only \
+java -jar backend/axiom-parent/axiom-migrator/target/axiom-migrator-0.1.0-SNAPSHOT.jar
+AXIOM_DB_URL=jdbc:postgresql://localhost:5432/axiom \
+AXIOM_DB_USERNAME=axiom_app \
+AXIOM_DB_PASSWORD=axiom_dev_only \
+mvn -B verify -f backend/axiom-parent/pom.xml
 ```
 
-The architecture check validates the approved inward-only Maven module graph. Its regression tests use temporary POM fixtures to verify that reverse dependencies, inherited/profile dependencies, duplicate edges, missing modules and malformed POMs are rejected.
+The architecture check validates the API's inward-only Maven module graph and keeps the standalone migrator isolated with no internal module dependencies. Its regression tests use temporary POM fixtures to verify that reverse dependencies, inherited/profile dependencies, duplicate edges, missing modules and malformed POMs are rejected. Additional tests ensure Flyway dependencies and migration credentials stay outside the API artifact and process.
 
-The integration tests require a reachable PostgreSQL 17 database. GitHub Actions provisions separate restricted migration-owner and runtime roles before running Maven. Flyway uses the migration credentials; the application JDBC pool uses the runtime identity. The tests verify schema/table ownership, denied runtime DDL, explicit runtime DML, Flyway migrations, application startup, HTTP health endpoints, and tenant isolation with PostgreSQL row-level security enabled and forced.
+The integration tests require a reachable PostgreSQL 17 database. GitHub Actions provisions separate restricted migration-owner and runtime roles, builds the standalone `axiom-migrator` artifact, and runs it as a one-shot process with migration credentials. The subsequent API build and integration tests receive only runtime credentials. The tests verify schema/table ownership, denied runtime DDL, explicit runtime DML, the pre-migrated schema, application startup, HTTP health endpoints, and tenant isolation with PostgreSQL row-level security enabled and forced.
 
 ## Start PostgreSQL locally
 ```bash
 docker compose -f deployment/compose/docker-compose.yml up -d postgres
 ```
 
-The local database listens on localhost:5432. The application connects as the restricted `axiom_app` runtime role (default password: `axiom_dev_only`). Flyway connects as the separate `axiom_migrator` schema-owner role (default password: `axiom_migrator_dev_only`). The PostgreSQL `axiom_admin` role is used only to initialize the local database. These credentials are for local development only.
+The local database listens on localhost:5432. The API connects as the restricted `axiom_app` runtime role (default password: `axiom_dev_only`). The separate `axiom-migrator` executable connects as `axiom_migrator` (default password: `axiom_migrator_dev_only`). The PostgreSQL `axiom_admin` role is used only to initialize the local database. These credentials are for local development only.
 
 The initialization SQL runs only when PostgreSQL creates a new data directory. If you already have a database volume from an earlier single-role setup, do not delete it. Connect as a PostgreSQL administrator and perform a one-time ownership transition before starting the updated application:
 
@@ -34,9 +42,8 @@ CREATE ROLE axiom_migrator LOGIN PASSWORD 'replace_with_local_migration_password
 CREATE ROLE axiom_app LOGIN PASSWORD 'replace_with_local_runtime_password'
     NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
 GRANT CONNECT ON DATABASE axiom TO axiom_migrator, axiom_app;
-GRANT CREATE ON DATABASE axiom TO axiom_migrator;
-
 ALTER SCHEMA axiom OWNER TO axiom_migrator;
+REVOKE CREATE ON DATABASE axiom FROM axiom_migrator;
 ALTER TABLE axiom.flyway_schema_history OWNER TO axiom_migrator;
 ALTER TABLE axiom.tenant OWNER TO axiom_migrator;
 ALTER TABLE axiom.organization OWNER TO axiom_migrator;
@@ -60,10 +67,26 @@ ALTER ROLE axiom NOLOGIN;
 REVOKE CREATE, CONNECT ON DATABASE axiom FROM axiom;
 ```
 
-Set `AXIOM_DB_USERNAME` / `AXIOM_DB_PASSWORD` for the runtime connection and `AXIOM_FLYWAY_USERNAME` / `AXIOM_FLYWAY_PASSWORD` for Flyway. The migration identity owns schema objects and has database CREATE only because the immutable V1 migration executes `CREATE SCHEMA IF NOT EXISTS`; the runtime identity never receives database or schema CREATE. The runtime identity receives schema USAGE and explicit DML grants from migrations. Future migrations must grant write privileges explicitly for each new runtime table. Flyway schema creation is disabled, so the `axiom` schema must be provisioned by the database administrator or initialization script before startup.
+Set `AXIOM_DB_USERNAME` / `AXIOM_DB_PASSWORD` for the API runtime. The migration process uses only `AXIOM_MIGRATION_DB_URL`, `AXIOM_MIGRATION_DB_USERNAME` and `AXIOM_MIGRATION_DB_PASSWORD`; never inject these variables into API instances. The migration identity owns the `axiom` schema and has schema CREATE only, not database-wide CREATE. The database administrator or initialization script must pre-create the empty schema. For a new database, the migrator explicitly baselines that empty schema at version 1 because immutable V1 only created the schema, then applies V2 onward. Existing databases with Flyway history continue from their recorded version. If the history table is absent but the schema contains other objects, the migrator fails closed rather than baselining an unknown state. The runtime identity receives schema USAGE and explicit DML grants from migrations. Future migrations must grant write privileges explicitly for each new runtime table. Flyway schema creation is disabled.
 
-## Run the application
+## Run migrations and start the API
+
+Build the one-shot migration executable and run it as a separate process. The command below is for local development; supply the migration credentials only to this process:
+
 ```bash
+mvn -B -DskipTests package -f backend/axiom-parent/pom.xml
+AXIOM_MIGRATION_DB_URL=jdbc:postgresql://localhost:5432/axiom \
+AXIOM_MIGRATION_DB_USERNAME=axiom_migrator \
+AXIOM_MIGRATION_DB_PASSWORD=axiom_migrator_dev_only \
+java -jar backend/axiom-parent/axiom-migrator/target/axiom-migrator-0.1.0-SNAPSHOT.jar
+```
+
+Start the API separately with runtime credentials only:
+
+```bash
+AXIOM_DB_URL=jdbc:postgresql://localhost:5432/axiom \
+AXIOM_DB_USERNAME=axiom_app \
+AXIOM_DB_PASSWORD=axiom_dev_only \
 mvn -f backend/axiom-parent/pom.xml -pl axiom-bootstrap -am spring-boot:run
 ```
 
@@ -102,4 +125,4 @@ Check:
 - http://localhost:8080/actuator/health
 - http://localhost:8080/api/v1/system
 
-Only `axiom-bootstrap` is executable. Other modules are libraries within the modular monolith.
+`axiom-bootstrap` is the API executable and `axiom-migrator` is a separate one-shot migration executable. The migrator has no internal module dependencies and contains the Flyway migration resources; the API artifact does not include Flyway or migration credentials. Other modules are libraries within the modular monolith. The repository does not yet define a production container image or orchestrator-specific Job manifest; deployment owners must run the migrator artifact as a pre-start job and provide migration credentials only to that job.
