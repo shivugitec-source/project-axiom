@@ -13,6 +13,9 @@ Run from the repository root after starting the local PostgreSQL service (see be
 python3 backend/verify-module-dependencies.py
 python3 -m unittest discover -s backend/tests -p 'test_*.py' -v
 mvn -B -DskipTests clean package -f backend/axiom-parent/pom.xml
+python3 backend/verify-migration-artifacts.py \\
+  backend/axiom-parent/axiom-bootstrap/target/axiom-bootstrap-0.1.0-SNAPSHOT.jar \\
+  backend/axiom-parent/axiom-migrator/target/axiom-migrator-0.1.0-SNAPSHOT.jar
 AXIOM_MIGRATION_DB_URL=jdbc:postgresql://localhost:5432/axiom \
 AXIOM_MIGRATION_DB_USERNAME=axiom_migrator \
 AXIOM_MIGRATION_DB_PASSWORD=axiom_migrator_dev_only \
