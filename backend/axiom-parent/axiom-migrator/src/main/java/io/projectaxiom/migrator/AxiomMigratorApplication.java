@@ -112,11 +112,12 @@ public final class AxiomMigratorApplication {
 
     private static int countSchemaRelations(Connection connection) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT COUNT(*)
-                FROM pg_class c
-                JOIN pg_namespace n ON n.oid = c.relnamespace
+                SELECT
+                    (SELECT COUNT(*) FROM pg_class c WHERE c.relnamespace = n.oid)
+                    + (SELECT COUNT(*) FROM pg_proc p WHERE p.pronamespace = n.oid)
+                    + (SELECT COUNT(*) FROM pg_type t WHERE t.typnamespace = n.oid AND t.typtype <> 'p')
+                FROM pg_namespace n
                 WHERE n.nspname = 'axiom'
-                  AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
                 """);
              ResultSet result = statement.executeQuery()) {
             result.next();
