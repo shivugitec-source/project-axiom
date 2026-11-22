@@ -5,6 +5,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -80,6 +81,61 @@ class AxiomApplicationIntegrationTest {
                     "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = ? AND success = true",
                     Integer.class, version);
             assertThat(migrationCount).as("Flyway migration V" + version).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void everyTenantOwnedTableHasForcedTenantScopedRlsPolicies() {
+        List<String> tenantTables = jdbcTemplate.queryForList("""
+                SELECT DISTINCT table_name
+                FROM information_schema.columns
+                WHERE table_schema = 'axiom' AND column_name = 'tenant_id'
+                ORDER BY table_name
+                """, String.class);
+
+        assertThat(tenantTables).containsExactlyInAnyOrder(
+                "membership_role",
+                "organization",
+                "party",
+                "party_contact_point",
+                "party_role",
+                "role_permission",
+                "tenant_membership",
+                "tenant_role");
+
+        for (String table : tenantTables) {
+            Boolean forcedRls = jdbcTemplate.queryForObject("""
+                    SELECT c.relrowsecurity AND c.relforcerowsecurity
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'axiom' AND c.relname = ?
+                    """, Boolean.class, table);
+            assertThat(forcedRls).as(table + " must enable and force RLS").isTrue();
+
+            Integer policyCount = jdbcTemplate.queryForObject("""
+                    SELECT COUNT(*)
+                    FROM pg_policies
+                    WHERE schemaname = 'axiom' AND tablename = ?
+                    """, Integer.class, table);
+            assertThat(policyCount).as(table + " must define at least one RLS policy")
+                    .isGreaterThan(0);
+
+            Integer unscopedPolicies = jdbcTemplate.queryForObject("""
+                    SELECT COUNT(*)
+                    FROM pg_policies
+                    WHERE schemaname = 'axiom'
+                      AND tablename = ?
+                      AND (
+                          (cmd IN ('SELECT', 'UPDATE', 'DELETE', 'ALL')
+                              AND COALESCE(qual, '') NOT LIKE '%axiom.tenant_id%')
+                          OR
+                          (cmd IN ('INSERT', 'UPDATE', 'ALL')
+                              AND COALESCE(with_check, '') NOT LIKE '%axiom.tenant_id%')
+                      )
+                    """, Integer.class, table);
+            assertThat(unscopedPolicies)
+                    .as(table + " must not have an RLS policy that bypasses tenant context")
+                    .isZero();
         }
     }
 
