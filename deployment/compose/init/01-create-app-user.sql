@@ -7,7 +7,9 @@ CREATE ROLE axiom_app LOGIN PASSWORD 'axiom_dev_only'
     NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
 
 GRANT CONNECT ON DATABASE axiom TO axiom_migrator, axiom_app;
--- The schema is pre-created and owned by the migration identity. The migrator\n-- baselines the empty schema at V1, so no database-wide CREATE is required.\nCREATE SCHEMA axiom AUTHORIZATION axiom_migrator;
+-- The schema is pre-created and owned by the migration identity. The migrator
+-- baselines the empty schema at V1, so no database-wide CREATE is required.
+CREATE SCHEMA axiom AUTHORIZATION axiom_migrator;
 GRANT USAGE ON SCHEMA axiom TO axiom_app;
 
 -- New migration-created tables are readable by the application by default.
