@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests, Party contact points, modular-monolith dependency enforcement with regression tests, a database-backed invariant for forced tenant-scoped RLS on every tenant-owned table, and PostgreSQL assertions that the application connection role lacks SUPERUSER/BYPASSRLS/admin attributes and direct role memberships are merged. A separate migration-owner/runtime-role boundary is still outstanding. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests, Party contact points, modular-monolith dependency enforcement with regression tests, a database-backed invariant for forced tenant-scoped RLS on every tenant-owned table, and a separate Flyway migration-owner/runtime application-role boundary with explicit runtime privileges and PostgreSQL-backed ownership/DDL-denial tests are merged. The migration identity retains database CREATE because immutable V1 executes CREATE SCHEMA IF NOT EXISTS; the runtime identity has no database/schema CREATE, table ownership or Flyway-history access. Flyway still runs during Spring Boot startup, so migration credentials remain available to the application process and must be moved to a separate migration job before production API startup. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
 
 ## Completed foundations
 
@@ -135,11 +135,23 @@
 - Main CI #216 passed on merge commit `532cd0b20084f4fc638e644d25cb5c844740fac4` with the same 36-test result.
 - PR #28 was squash-merged as `7ff9d3aca61e2b0a0f93731c00defa18640b98d2` after PR CI #219 passed on exact head `57cddf03eded2eb1a7daec72be2633dbee0940fa`; the integration invariant also rejects direct membership in another PostgreSQL role, preventing `SET ROLE` privilege escalation.
 - Main CI #220 passed on merge commit `7ff9d3aca61e2b0a0f93731c00defa18640b98d2`; PostgreSQL 17-backed Maven verification reported 36 tests with zero failures, errors or skips and `BUILD SUCCESS`.
-- Security limitation identified during review: `application.yml` does not configure separate Flyway credentials, so Flyway currently uses the application datasource identity. That identity creates and owns the schema objects and can therefore perform DDL, including changing table policies; the role-attribute and membership assertions do not remove this ownership capability.
-- Required follow-up: separate a migration-owner identity from the runtime login, grant runtime only schema usage and required DML, and add PostgreSQL tests proving the runtime role does not own tenant tables and cannot perform schema/table DDL. Do not describe the current role as fully unable to alter RLS.
+- At the time of PR #26, the same datasource identity performed Flyway migrations and runtime queries. PR #31 resolves the database-role ownership boundary; see Engineering E-5 for exact evidence.
+- Remaining limitation after PR #31 is process-level: Spring Boot still loads both credential sets for startup Flyway, and the migration identity retains database CREATE because of the immutable V1 schema statement. Do not treat database-role separation as process isolation.
+
+### Engineering E-5 — Separate Flyway migration owner and runtime database role
+- The Spring datasource now connects as `axiom_app`; Flyway uses the distinct `axiom_migrator` login. The migration identity owns the `axiom` schema and its relations.
+- The runtime role receives database CONNECT, schema USAGE and explicit SELECT/INSERT/UPDATE/DELETE grants on operational tables. The platform permission catalogue is read-only; runtime has no access to `flyway_schema_history`.
+- New migration-created tables receive SELECT only by default. Each migration must explicitly grant write privileges to the runtime role for its new table.
+- PostgreSQL integration coverage verifies the runtime role has no database/schema CREATE, no role memberships, no schema/table ownership, and cannot execute `ALTER TABLE axiom.party DISABLE ROW LEVEL SECURITY`. It also verifies migration ownership, restricted role attributes, read-only permission catalogue access and runtime DML.
+- The migration role is non-superuser and has no CREATEDB, CREATEROLE, REPLICATION, BYPASSRLS, INHERIT or role memberships. It retains the database CREATE ACL because the immutable V1 migration executes `CREATE SCHEMA IF NOT EXISTS`; the runtime role never receives this privilege.
+- Flyway history is inspected through the Flyway migration connection, not through the runtime JDBC identity.
+- Local Compose initialization and Backend CI provision both identities. The backend README documents a one-time ownership transfer for existing local volumes without deleting data.
+- PR #31 was squash-merged as `47ff60d092ad105edf3810a505b2aea07f1229b5` after exact-head PR CI #229 passed on `1b1f8da3d9fa943deb85e85450c9358ad3a56064`.
+- Main CI #230 passed on merge commit `47ff60d092ad105edf3810a505b2aea07f1229b5`; PostgreSQL 17.12-backed Maven verification reported 37 tests with zero failures, errors or skips and `BUILD SUCCESS`.
+- Remaining security limitation: Flyway still runs inside the Spring Boot application process, so that process receives both credential sets at startup. This is database-role separation, not process isolation. Before production, execute migrations in a separate deployment job and withhold migration credentials from API instances.
 
 ## Not yet implemented
-- Separate Flyway migration ownership from the runtime application identity. The current single datasource means the application identity owns migrated objects; the runtime role must not retain DDL capability in the final least-privilege model.
+- Move Flyway execution into a dedicated migration job before production API startup, so migration credentials are not injected into the application process. Revisit the legacy V1 schema bootstrap so the migration identity can eventually avoid database-wide CREATE while retaining ownership of the Axiom schema.
 - Define and document the next business-domain capability (business purpose, actors, lifecycle, invariants, fields, workflows and API acceptance) before adding speculative domain entities. The current README lists target industries but no detailed business requirements or ADRs define the next slice.
 - Define and implement platform-level tenant provisioning authorization only after its authority, approval and audit policy is established.
 - Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
@@ -165,7 +177,7 @@
 - Tenant controllers remain local-profile only. No production endpoint exposure is added.
 
 ## Next implementation sequence
-1. Separate migration-owner and runtime database identities, grant only the runtime schema/DML privileges required, and prove the runtime identity cannot own or alter tenant tables.
+1. Move Flyway into a separate deployment/migration job and keep its credentials out of API instances; revisit the V1 bootstrap to reduce the migration identity's database-wide CREATE grant.
 2. Select the next business-domain capability only when its lifecycle, invariants and API contract are supported by documented requirements. The current README lists target industries but does not define their business rules; do not invent a domain slice.
 3. Define platform-level tenant-provisioning authorization, including authority, approval and audit requirements, before implementing tenant creation.
 4. Review real production OIDC issuer/audience configuration and operational readiness before any production tenant API exposure.
