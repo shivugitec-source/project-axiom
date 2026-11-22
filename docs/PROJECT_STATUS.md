@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests, Party contact points and modular-monolith dependency enforcement with regression tests are merged. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests, Party contact points, modular-monolith dependency enforcement with regression tests, and a database-backed invariant for forced tenant-scoped RLS on every tenant-owned table are merged. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
 
 ## Completed foundations
 
@@ -121,11 +121,16 @@
 - PR #22 was squash-merged as `b53ae35f403f50be57ac7b8ccc8d64fd1df15569` after PR CI #207 passed on exact head `27987b9eff447061309226023bb16f97c49d8026`; push CI #206 also passed on that exact head.
 - Both exact-head runs reported 12 Python tests passing and Maven `BUILD SUCCESS`; main CI #208 passed on merge commit `b53ae35f403f50be57ac7b8ccc8d64fd1df15569`.
 
+### Engineering E-3 — Tenant-table forced-RLS invariant
+- Added a PostgreSQL integration invariant that discovers all base tables in schema `axiom` with a `tenant_id` column and keeps the expected tenant-owned table set explicit.
+- For every discovered tenant-owned table, the test requires both RLS enabled and FORCE RLS enabled, at least one policy, and rejects policies whose applicable `USING` or `WITH CHECK` expression omits the transaction-local `axiom.tenant_id` context. This protects future tenant-owned tables against accidental omission or an additional unscoped policy.
+- PR #24 was squash-merged as `740d12c1581f7b0c8b38bb9bcdb4667cd1e78b89` after PR CI #211 passed on exact head `3195924f56f66b411a08f51c74ac7a8f47b0ee63`.
+- Main CI #212 passed on merge commit `740d12c1581f7b0c8b38bb9bcdb4667cd1e78b89`; PostgreSQL 17-backed Maven verification reported 35 tests with zero failures, errors or skips and `BUILD SUCCESS`. The new invariant ran inside `AxiomApplicationIntegrationTest`.
+
 ## Not yet implemented
 - Define and document the next business-domain capability (business purpose, actors, lifecycle, invariants, fields, workflows and API acceptance) before adding speculative domain entities. The current README lists target industries but no detailed business requirements or ADRs define the next slice.
 - Define and implement platform-level tenant provisioning authorization only after its authority, approval and audit policy is established.
 - Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
-- Define the next business-domain slice from an explicit domain model/requirements before implementation; the README currently states broad industry goals but does not specify the next entity lifecycle or business rules.
 
 ## Development rules
 - Keep the modular-monolith architecture.
