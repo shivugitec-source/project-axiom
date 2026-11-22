@@ -29,6 +29,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Verify committed Flyway migrations are immutable
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
