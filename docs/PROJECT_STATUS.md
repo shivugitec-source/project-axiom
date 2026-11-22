@@ -129,9 +129,11 @@
 - PostgreSQL integration coverage checks forced RLS, tenant isolation, cross-tenant party binding rejection, and EMAIL/PHONE persistence.
 - PR #18 was squash-merged as `13b766dcb12e08457ec56496f8dacb52c54f2df7` after PR CI #193 passed on exact head `d8e4bc920f62d249a7130684cb706c8854e12947`.
 - Main CI #194 passed on merge commit `13b766dcb12e08457ec56496f8dacb52c54f2df7`.
+- PR #19 (documentation correction) was squash-merged as `32783236d093fcc323dad8a88fd3f9dc4e0f616d` after PR CI #196 passed on exact head `71edb2d4b5d8f32dff3f1cbd677af4b0607ed745`.
+- Main CI #197 passed on merge commit `32783236d093fcc323dad8a88fd3f9dc4e0f616d`.
 - Tenant controllers remain local-profile only. No production endpoint exposure is added.
 
 ## Next implementation sequence
-1. Select and document the next business-domain capability and its lifecycle, invariants and API contract, independent of platform tenant provisioning.
-2. Define platform-level authorization and approval rules for tenant provisioning before implementing platform tenant creation.
-3. Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
+1. Complete review and exact-head CI validation of the modular-monolith dependency guard in PR #20; record its merge and main-branch CI evidence.
+2. Select the next business-domain capability only after its lifecycle, invariants and API contract are supported by documented requirements; the current README lists industries but does not define those rules.
+3. Define platform-level tenant-provisioning authorization and review production OIDC readiness before any production tenant API exposure.
