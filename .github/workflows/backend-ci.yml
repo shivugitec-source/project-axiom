@@ -30,6 +30,8 @@ jobs:
       AXIOM_DB_URL: jdbc:postgresql://localhost:5432/axiom
       AXIOM_DB_USERNAME: axiom_app
       AXIOM_DB_PASSWORD: axiom_ci_password
+      AXIOM_FLYWAY_USERNAME: axiom_migrator
+      AXIOM_FLYWAY_PASSWORD: axiom_ci_migration_password
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -43,11 +45,20 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - name: Provision restricted application database role
+      - name: Provision separate migration and runtime database roles
         env:
           POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
         run: |
-          docker exec "$POSTGRES_CONTAINER_ID" psql -U postgres -d axiom -v ON_ERROR_STOP=1 -c "CREATE ROLE axiom_app LOGIN PASSWORD 'axiom_ci_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT"
-          docker exec "$POSTGRES_CONTAINER_ID" psql -U postgres -d axiom -v ON_ERROR_STOP=1 -c "GRANT CONNECT, CREATE ON DATABASE axiom TO axiom_app"
+          docker exec -i "$POSTGRES_CONTAINER_ID" psql -U postgres -d axiom -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE axiom_migrator LOGIN PASSWORD 'axiom_ci_migration_password'
+              NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+          CREATE ROLE axiom_app LOGIN PASSWORD 'axiom_ci_password'
+              NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+          GRANT CONNECT ON DATABASE axiom TO axiom_migrator, axiom_app;
+          CREATE SCHEMA axiom AUTHORIZATION axiom_migrator;
+          GRANT USAGE ON SCHEMA axiom TO axiom_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE axiom_migrator IN SCHEMA axiom
+              GRANT SELECT ON TABLES TO axiom_app;
+          SQL
       - name: Verify backend
         run: mvn -B -ntp clean verify -f backend/axiom-parent/pom.xml
