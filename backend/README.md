@@ -34,6 +34,7 @@ CREATE ROLE axiom_migrator LOGIN PASSWORD 'replace_with_local_migration_password
 CREATE ROLE axiom_app LOGIN PASSWORD 'replace_with_local_runtime_password'
     NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
 GRANT CONNECT ON DATABASE axiom TO axiom_migrator, axiom_app;
+GRANT CREATE ON DATABASE axiom TO axiom_migrator;
 
 ALTER SCHEMA axiom OWNER TO axiom_migrator;
 ALTER TABLE axiom.flyway_schema_history OWNER TO axiom_migrator;
