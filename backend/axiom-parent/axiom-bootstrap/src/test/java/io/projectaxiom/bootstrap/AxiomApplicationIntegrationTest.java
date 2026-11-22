@@ -6,6 +6,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -44,6 +45,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("local")
 class AxiomApplicationIntegrationTest {
+
+    private static final String EXPECTED_TENANT_POLICY_EXPRESSION =
+            "tenant_id=nullifcurrent_setting'axiom.tenant_id',true,''";
+
+    private record RlsPolicy(
+            String name, String permissive, String command, String usingExpression, String checkExpression) {
+    }
+
+    private static String normalizePolicyExpression(String expression) {
+        return expression.toLowerCase(Locale.ROOT)
+                .replaceAll("\\s+", "")
+                .replace("::text", "")
+                .replace("::uuid", "")
+                .replace("(", "")
+                .replace(")", "");
+    }
 
     @LocalServerPort
     private int port;
@@ -274,6 +291,20 @@ class AxiomApplicationIntegrationTest {
     }
 
     @Test
+    void tenantPolicyExpressionNormalizationRejectsTautologicalPredicates() {
+        String approved = "((tenant_id = NULLIF(current_setting('axiom.tenant_id'::text, true), ''::text)::uuid))";
+        String tautology = "(tenant_id IS NOT NULL AND current_setting('axiom.tenant_id'::text, true) IS NOT NULL)";
+        String wrongSetting = "(tenant_id = NULLIF(current_setting('other.tenant_id'::text, true), ''::text)::uuid)";
+
+        assertThat(normalizePolicyExpression(approved))
+                .isEqualTo(EXPECTED_TENANT_POLICY_EXPRESSION);
+        assertThat(normalizePolicyExpression(tautology))
+                .isNotEqualTo(EXPECTED_TENANT_POLICY_EXPRESSION);
+        assertThat(normalizePolicyExpression(wrongSetting))
+                .isNotEqualTo(EXPECTED_TENANT_POLICY_EXPRESSION);
+    }
+
+    @Test
     void everyTenantOwnedTableHasForcedTenantScopedRlsPolicies() {
         List<String> tenantTables = jdbcTemplate.queryForList("""
                 SELECT DISTINCT table_name
@@ -301,30 +332,33 @@ class AxiomApplicationIntegrationTest {
                     """, Boolean.class, table);
             assertThat(forcedRls).as(table + " must enable and force RLS").isTrue();
 
-            Integer policyCount = jdbcTemplate.queryForObject("""
-                    SELECT COUNT(*)
+            List<RlsPolicy> policies = jdbcTemplate.query("""
+                    SELECT policyname, permissive, cmd, qual, with_check
                     FROM pg_policies
                     WHERE schemaname = 'axiom' AND tablename = ?
-                    """, Integer.class, table);
-            assertThat(policyCount).as(table + " must define at least one RLS policy")
-                    .isGreaterThan(0);
+                    ORDER BY policyname
+                    """, (rs, row) -> new RlsPolicy(
+                    rs.getString("policyname"),
+                    rs.getString("permissive"),
+                    rs.getString("cmd"),
+                    rs.getString("qual"),
+                    rs.getString("with_check")), table);
+            assertThat(policies)
+                    .as(table + " must have exactly one tenant-isolation policy")
+                    .hasSize(1);
 
-            Integer unscopedPolicies = jdbcTemplate.queryForObject("""
-                    SELECT COUNT(*)
-                    FROM pg_policies
-                    WHERE schemaname = 'axiom'
-                      AND tablename = ?
-                      AND (
-                          (cmd IN ('SELECT', 'UPDATE', 'DELETE', 'ALL')
-                              AND COALESCE(qual, '') NOT LIKE '%axiom.tenant_id%')
-                          OR
-                          (cmd IN ('INSERT', 'UPDATE', 'ALL')
-                              AND COALESCE(with_check, '') NOT LIKE '%axiom.tenant_id%')
-                      )
-                    """, Integer.class, table);
-            assertThat(unscopedPolicies)
-                    .as(table + " must not have an RLS policy that bypasses tenant context")
-                    .isZero();
+            RlsPolicy policy = policies.get(0);
+            assertThat(policy.name()).isEqualTo(table + "_tenant_isolation");
+            assertThat(policy.permissive()).isEqualTo("PERMISSIVE");
+            assertThat(policy.command()).isEqualTo("ALL");
+            assertThat(policy.usingExpression()).isNotNull();
+            assertThat(policy.checkExpression()).isNotNull();
+            assertThat(normalizePolicyExpression(policy.usingExpression()))
+                    .as(table + " USING must compare tenant_id to the transaction tenant")
+                    .isEqualTo(EXPECTED_TENANT_POLICY_EXPRESSION);
+            assertThat(normalizePolicyExpression(policy.checkExpression()))
+                    .as(table + " WITH CHECK must compare tenant_id to the transaction tenant")
+                    .isEqualTo(EXPECTED_TENANT_POLICY_EXPRESSION);
         }
     }
 
