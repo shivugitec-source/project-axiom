@@ -36,16 +36,17 @@ class TenantContextTest {
             assertThrows(IllegalStateException.class, () -> TenantContext.open(UUID.randomUUID()));
         }
     }
+
     @Test
     void rejectsClosingScopeFromDifferentThreadAndLeavesOwnerAbleToClose() throws InterruptedException {
         UUID tenantId = UUID.randomUUID();
         TenantContext.Scope scope = TenantContext.open(tenantId);
-        AtomicReference<Throwable> closeFailure = new AtomicReference<>();
+        AtomicReference<RuntimeException> closeFailure = new AtomicReference<>();
 
         Thread wrongThread = new Thread(() -> {
             try {
                 scope.close();
-            } catch (Throwable failure) {
+            } catch (RuntimeException failure) {
                 closeFailure.set(failure);
             }
         });
