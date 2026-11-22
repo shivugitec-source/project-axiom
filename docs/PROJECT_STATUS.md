@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests, Party contact points, modular-monolith dependency enforcement with regression tests, and a database-backed invariant for forced tenant-scoped RLS on every tenant-owned table are merged. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests, Party contact points, modular-monolith dependency enforcement with regression tests, a database-backed invariant for forced tenant-scoped RLS on every tenant-owned table, and a PostgreSQL assertion that the runtime application role cannot bypass RLS or exercise database-administration privileges are merged. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
 
 ## Completed foundations
 
@@ -126,6 +126,13 @@
 - For every discovered tenant-owned table, the test requires both RLS enabled and FORCE RLS enabled, at least one policy, and rejects policies whose applicable `USING` or `WITH CHECK` expression omits the transaction-local `axiom.tenant_id` context. This protects future tenant-owned tables against accidental omission or an additional unscoped policy.
 - PR #24 was squash-merged as `740d12c1581f7b0c8b38bb9bcdb4667cd1e78b89` after PR CI #211 passed on exact head `3195924f56f66b411a08f51c74ac7a8f47b0ee63`.
 - Main CI #212 passed on merge commit `740d12c1581f7b0c8b38bb9bcdb4667cd1e78b89`; PostgreSQL 17-backed Maven verification reported 35 tests with zero failures, errors or skips and `BUILD SUCCESS`. The new invariant ran inside `AxiomApplicationIntegrationTest`.
+
+### Engineering E-4 — Restricted application database role invariant
+- Added a PostgreSQL integration assertion against the actual JDBC `current_user` used by the application.
+- The runtime role must be a login and must not have SUPERUSER, CREATEROLE, CREATEDB, REPLICATION, BYPASSRLS or INHERIT attributes.
+- The test also verifies the role retains the database CONNECT and CREATE privileges required by the documented connection and Flyway schema bootstrap.
+- PR #26 was squash-merged as `532cd0b20084f4fc638e644d25cb5c844740fac4` after PR CI #215 passed on exact head `a7d7ae4badef311f41e9752e6c065179665b4197`; PostgreSQL 17-backed Maven verification reported 36 tests with zero failures, errors or skips and `BUILD SUCCESS`.
+- Main CI #216 passed on merge commit `532cd0b20084f4fc638e644d25cb5c844740fac4` with the same 36-test result.
 
 ## Not yet implemented
 - Define and document the next business-domain capability (business purpose, actors, lifecycle, invariants, fields, workflows and API acceptance) before adding speculative domain entities. The current README lists target industries but no detailed business requirements or ADRs define the next slice.
