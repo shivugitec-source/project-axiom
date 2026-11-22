@@ -12,7 +12,15 @@ Run from the repository root:
 ```bash
 python3 backend/verify-module-dependencies.py
 python3 -m unittest discover -s backend/tests -p 'test_*.py' -v
-mvn -B clean verify -f backend/axiom-parent/pom.xml
+mvn -B -DskipTests clean package -f backend/axiom-parent/pom.xml
+AXIOM_MIGRATION_DB_URL=jdbc:postgresql://localhost:5432/axiom \
+AXIOM_MIGRATION_DB_USERNAME=axiom_migrator \
+AXIOM_MIGRATION_DB_PASSWORD=axiom_migrator_dev_only \
+java -jar backend/axiom-parent/axiom-migrator/target/axiom-migrator-0.1.0-SNAPSHOT.jar
+AXIOM_DB_URL=jdbc:postgresql://localhost:5432/axiom \
+AXIOM_DB_USERNAME=axiom_app \
+AXIOM_DB_PASSWORD=axiom_dev_only \
+mvn -B verify -f backend/axiom-parent/pom.xml
 ```
 
 The architecture check validates the approved inward-only Maven module graph. Its regression tests use temporary POM fixtures to verify that reverse dependencies, inherited/profile dependencies, duplicate edges, missing modules and malformed POMs are rejected.
@@ -59,7 +67,7 @@ ALTER ROLE axiom NOLOGIN;
 REVOKE CREATE, CONNECT ON DATABASE axiom FROM axiom;
 ```
 
-Set `AXIOM_DB_USERNAME` / `AXIOM_DB_PASSWORD` for the runtime connection and `AXIOM_FLYWAY_USERNAME` / `AXIOM_FLYWAY_PASSWORD` for Flyway. The migration identity owns schema objects and has database CREATE only because the immutable V1 migration executes `CREATE SCHEMA IF NOT EXISTS`; the runtime identity never receives database or schema CREATE. The runtime identity receives schema USAGE and explicit DML grants from migrations. Future migrations must grant write privileges explicitly for each new runtime table. Flyway schema creation is disabled, so the `axiom` schema must be provisioned by the database administrator or initialization script before startup.
+Set `AXIOM_DB_USERNAME` / `AXIOM_DB_PASSWORD` for the API runtime. The migration process uses only `AXIOM_MIGRATION_DB_URL`, `AXIOM_MIGRATION_DB_USERNAME` and `AXIOM_MIGRATION_DB_PASSWORD`; never inject these variables into API instances. The migration identity owns the `axiom` schema and has schema CREATE only, not database-wide CREATE. The database administrator or initialization script must pre-create the empty schema. For a new database, the migrator explicitly baselines that empty schema at version 1 because immutable V1 only created the schema, then applies V2 onward. Existing databases with Flyway history continue from their recorded version. If the history table is absent but the schema contains other objects, the migrator fails closed rather than baselining an unknown state. The runtime identity receives schema USAGE and explicit DML grants from migrations. Future migrations must grant write privileges explicitly for each new runtime table. Flyway schema creation is disabled.
 
 ## Run migrations and start the API
 
