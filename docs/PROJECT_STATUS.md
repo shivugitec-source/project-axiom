@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests, Party contact points, modular-monolith dependency enforcement with regression tests, a database-backed invariant for forced tenant-scoped RLS on every tenant-owned table, and a separate Flyway migration-owner/runtime application-role boundary with explicit runtime privileges and PostgreSQL-backed ownership/DDL-denial tests are merged. The migration identity retains database CREATE because immutable V1 executes CREATE SCHEMA IF NOT EXISTS; the runtime identity has no database/schema CREATE, table ownership or Flyway-history access. Flyway still runs during Spring Boot startup, so migration credentials remain available to the application process and must be moved to a separate migration job before production API startup. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests, Party contact points, modular-monolith dependency enforcement with regression tests, a database-backed invariant for forced tenant-scoped RLS on every tenant-owned table, a separate Flyway migration-owner/runtime application-role boundary with explicit runtime privileges and PostgreSQL-backed ownership/DDL-denial tests, and a PostgreSQL default-privilege invariant that keeps future tables read-only to the runtime role unless a migration explicitly grants writes are merged. The migration identity retains database CREATE because immutable V1 executes CREATE SCHEMA IF NOT EXISTS; the runtime identity has no database/schema CREATE, table ownership or Flyway-history access. Flyway still runs during Spring Boot startup, so migration credentials remain available to the application process and must be moved to a separate migration job before production API startup. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
 
 ## Completed foundations
 
@@ -149,6 +149,13 @@
 - PR #31 was squash-merged as `47ff60d092ad105edf3810a505b2aea07f1229b5` after exact-head PR CI #229 passed on `1b1f8da3d9fa943deb85e85450c9358ad3a56064`.
 - Main CI #230 passed on merge commit `47ff60d092ad105edf3810a505b2aea07f1229b5`; PostgreSQL 17.12-backed Maven verification reported 37 tests with zero failures, errors or skips and `BUILD SUCCESS`.
 - Remaining security limitation: Flyway still runs inside the Spring Boot application process, so that process receives both credential sets at startup. This is database-role separation, not process isolation. Before production, execute migrations in a separate deployment job and withhold migration credentials from API instances.
+
+### Engineering E-6 — Read-only default privileges for future tables
+- Added a PostgreSQL integration invariant over `pg_default_acl` for the `axiom_migrator` role.
+- Requires future tables in schema `axiom` to grant only non-grantable SELECT to `axiom_app` by default. It rejects any other default privilege for the runtime role and any default table privilege granted to PUBLIC, including global defaults.
+- This protects the least-privilege pattern established by PR #31: every new runtime-managed table must receive explicit write grants in its own migration.
+- PR #33 was squash-merged as `a180c78acfc7ef6de6160423ed32dec61fb70796` after exact-head PR CI #239 passed on `ec67ad36eadc099a485b7b0853f2aa8752026232`.
+- Main CI #240 passed on merge commit `a180c78acfc7ef6de6160423ed32dec61fb70796`; PostgreSQL 17.12-backed Maven verification reported 38 tests with zero failures, errors or skips and `BUILD SUCCESS`.
 
 ## Not yet implemented
 - Move Flyway execution into a dedicated migration job before production API startup, so migration credentials are not injected into the application process. Revisit the legacy V1 schema bootstrap so the migration identity can eventually avoid database-wide CREATE while retaining ownership of the Axiom schema.
