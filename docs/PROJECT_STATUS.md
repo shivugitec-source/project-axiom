@@ -248,3 +248,9 @@
 - Added a PostgreSQL catalog integration invariant that enumerates every application base table other than Flyway history and requires the only tables without `tenant_id` to be the explicitly approved global tables: `tenant`, `user_identity` and `permission`.
 - This closes a discovery blind spot: a newly added table without `tenant_id` would previously be absent from the tenant-table RLS inventory. New tenant-owned tables remain subject to the existing exact table inventory, forced-RLS, predicate and runtime-role applicability checks.
 - The invariant is test-only and does not change production schema, database privileges, RLS policies or API exposure.
+
+### Engineering E-14 — Enforce tenant-consistent foreign keys
+- Extended PostgreSQL catalog integration coverage so every tenant-owned table must declare `tenant_id NOT NULL`.
+- Added a catalog invariant for every foreign key targeting an application table with `tenant_id`: the referencing and referenced key columns must both include `tenant_id`. This prevents a future relationship from linking a row to another tenant's record using only a globally unique row ID.
+- The check covers organization hierarchy, Party relationships, tenant memberships/roles and contact points without imposing tenant columns on intentional references to global identity or permission catalogues.
+- Test-only invariant; no production schema, migration, database privilege, RLS policy or API behavior changed.
