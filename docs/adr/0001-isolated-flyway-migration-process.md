@@ -17,7 +17,7 @@ The repository currently has no production container image or orchestrator-speci
 2. Remove Flyway dependencies and configuration from `axiom-bootstrap`. The API connects only as `axiom_app`; it does not read migration credentials or run migrations at startup.
 3. Run the migrator as a one-shot process before starting API instances. Provide `AXIOM_MIGRATION_DB_*` variables only to that process. Backend CI follows the same separation using step-scoped environments.
 4. Require the database administrator or initialization script to pre-create schema `axiom`, owned by the migration role. The migration role needs schema CREATE but not database-wide CREATE.
-5. Preserve immutable V1 bytes. When the migrator finds an empty pre-created schema without Flyway history, it verifies that there are no existing relations and explicitly baselines at version 1 before applying V2 onward. If relations exist without history, it fails closed. Databases with existing Flyway history continue from that history.
+5. Preserve the immutable V1 SQL statement and Flyway checksum compatibility; do not edit the already-applied migration. When the migrator finds an empty pre-created schema without Flyway history, it verifies that there are no existing relations and explicitly baselines at version 1 before applying V2 onward. If relations exist without history, it fails closed. Databases with existing Flyway history continue from that history.
 6. Keep Flyway schema creation and clean disabled in the migration executable.
 
 ## Consequences
