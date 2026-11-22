@@ -238,6 +238,7 @@ class AxiomApplicationIntegrationTest {
                       AND d.defaclobjtype = 'r'
                       AND privilege.grantee = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
                       AND privilege.privilege_type = 'SELECT'
+                      AND NOT privilege.is_grantable
                 )
                 AND NOT EXISTS (
                     SELECT 1
@@ -247,9 +248,7 @@ class AxiomApplicationIntegrationTest {
                       AND d.defaclnamespace = 'axiom'::regnamespace
                       AND d.defaclobjtype = 'r'
                       AND privilege.grantee = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
-                      AND privilege.privilege_type IN (
-                          'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'
-                      )
+                      AND (privilege.privilege_type <> 'SELECT' OR privilege.is_grantable)
                 )
                 """, Boolean.class);
 
