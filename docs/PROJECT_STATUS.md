@@ -243,3 +243,8 @@
 - Extended the PostgreSQL catalog invariant to inspect `pg_policies.roles` and require the single approved tenant-isolation policy to apply to `axiom_app`, either directly or through `PUBLIC`. A correct predicate attached only to a different role is no longer accepted as sufficient runtime protection.
 - PR #48 was squash-merged as `464a06d5ee70deaf1de1ecbbd946ad8ff4f7d27e` after exact-head push CI #302 and PR CI #303 passed on `6884b7e1a208e1ebecaf8d0dc7e3510f94ad30d3`.
 - Main CI #304 passed on merge commit `464a06d5ee70deaf1de1ecbbd946ad8ff4f7d27e`. PostgreSQL-backed verification reported 39 Python regression tests, 14 tenant/RLS integration tests, successful Maven `BUILD SUCCESS`, and zero test failures, errors or skips.
+
+### Engineering E-13 — Require explicit global-versus-tenant table classification
+- Added a PostgreSQL catalog integration invariant that enumerates every application base table other than Flyway history and requires the only tables without `tenant_id` to be the explicitly approved global tables: `tenant`, `user_identity` and `permission`.
+- This closes a discovery blind spot: a newly added table without `tenant_id` would previously be absent from the tenant-table RLS inventory. New tenant-owned tables remain subject to the existing exact table inventory, forced-RLS, predicate and runtime-role applicability checks.
+- The invariant is test-only and does not change production schema, database privileges, RLS policies or API exposure.
