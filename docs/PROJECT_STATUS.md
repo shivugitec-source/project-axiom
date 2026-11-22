@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests and Party contact points are merged. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests, Party contact points and modular-monolith dependency enforcement with regression tests are merged. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
 
 ## Completed foundations
 
@@ -113,8 +113,16 @@
 - Backend CI runs this check before Java setup and the PostgreSQL-backed Maven verification, so accidental reverse dependencies or skipped layers fail fast.
 - PR #20 was squash-merged as `6cb5fb98ded7a8c4723c531957b06d4e094d3f06` after PR CI #199 passed on exact head `4af1e3e26cf721759a6f9f44a8929c386a046721`.
 - Main CI #200 passed on merge commit `6cb5fb98ded7a8c4723c531957b06d4e094d3f06`.
+- PR #21 was squash-merged as `7f777c9c23c22d417d6643c19d71d66a56d1a9a9` after PR CI #201 passed on exact head `cdd1d0a981b920da8549e04f9d9151a13cd6beae`; main CI #202 passed on that merge commit.
+
+### Engineering E-2 — Regression-tested module dependency guard
+- Refactored the standard-library verifier into a testable repository-validation function. It checks project and profile dependency declarations in the parent and child POMs; all profile declarations are checked conservatively so activation cannot introduce an unreviewed reverse edge. Parent-inherited internal dependencies, duplicate edges within a dependency container, unknown/reverse dependencies, missing module POMs, artifact mismatches and malformed POM XML fail validation.
+- Added 12 `unittest` fixture tests covering the approved graph and the failure cases above. Backend CI executes the verifier and its regression suite before Java setup and PostgreSQL-backed Maven verification.
+- PR #22 was squash-merged as `b53ae35f403f50be57ac7b8ccc8d64fd1df15569` after PR CI #207 passed on exact head `27987b9eff447061309226023bb16f97c49d8026`; push CI #206 also passed on that exact head.
+- Both exact-head runs reported 12 Python tests passing and Maven `BUILD SUCCESS`; main CI #208 passed on merge commit `b53ae35f403f50be57ac7b8ccc8d64fd1df15569`.
 
 ## Not yet implemented
+- Define and document the next business-domain capability (business purpose, actors, lifecycle, invariants, fields, workflows and API acceptance) before adding speculative domain entities. The current README lists target industries but no detailed business requirements or ADRs define the next slice.
 - Define and implement platform-level tenant provisioning authorization only after its authority, approval and audit policy is established.
 - Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
 - Define the next business-domain slice from an explicit domain model/requirements before implementation; the README currently states broad industry goals but does not specify the next entity lifecycle or business rules.
