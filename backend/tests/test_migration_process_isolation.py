@@ -46,6 +46,29 @@ class MigrationProcessIsolationTests(unittest.TestCase):
         )
         self.assertEqual([], list(old_location.glob("V*.sql")))
 
+    def test_migration_role_has_schema_ddl_but_no_database_ddl(self) -> None:
+        init_sql = (
+            ROOT / "deployment" / "compose" / "init" / "01-create-app-user.sql"
+        ).read_text(encoding="utf-8")
+        workflow = (
+            ROOT / ".github" / "workflows" / "backend-ci.yml"
+        ).read_text(encoding="utf-8")
+        migrator_source = (
+            MIGRATOR / "src" / "main" / "java" / "io" / "projectaxiom"
+            / "migrator" / "AxiomMigratorApplication.java"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn(
+            "GRANT CREATE ON DATABASE axiom TO axiom_migrator",
+            init_sql + workflow,
+        )
+        self.assertIn(
+            "NOT has_database_privilege(current_user, current_database(), 'CREATE')",
+            migrator_source,
+        )
+        self.assertIn('.baselineVersion("1")', migrator_source)
+        self.assertIn("schemaHistoryExists(connection)", migrator_source)
+
     def test_ci_scopes_migration_credentials_to_the_one_shot_step(self) -> None:
         workflow = (
             ROOT / ".github" / "workflows" / "backend-ci.yml"
