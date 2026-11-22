@@ -23,7 +23,7 @@ AXIOM_DB_PASSWORD=axiom_dev_only \
 mvn -B verify -f backend/axiom-parent/pom.xml
 ```
 
-The architecture check validates the approved inward-only Maven module graph. Its regression tests use temporary POM fixtures to verify that reverse dependencies, inherited/profile dependencies, duplicate edges, missing modules and malformed POMs are rejected.
+The architecture check validates the API's inward-only Maven module graph and keeps the standalone migrator isolated with no internal module dependencies. Its regression tests use temporary POM fixtures to verify that reverse dependencies, inherited/profile dependencies, duplicate edges, missing modules and malformed POMs are rejected. Additional tests ensure Flyway dependencies and migration credentials stay outside the API artifact and process.
 
 The integration tests require a reachable PostgreSQL 17 database. GitHub Actions provisions separate restricted migration-owner and runtime roles, builds the standalone `axiom-migrator` artifact, and runs it as a one-shot process with migration credentials. The subsequent API build and integration tests receive only runtime credentials. The tests verify schema/table ownership, denied runtime DDL, explicit runtime DML, the pre-migrated schema, application startup, HTTP health endpoints, and tenant isolation with PostgreSQL row-level security enabled and forced.
 
