@@ -17,22 +17,50 @@ mvn -B clean verify -f backend/axiom-parent/pom.xml
 
 The architecture check validates the approved inward-only Maven module graph. Its regression tests use temporary POM fixtures to verify that reverse dependencies, inherited/profile dependencies, duplicate edges, missing modules and malformed POMs are rejected.
 
-The integration tests require a reachable PostgreSQL 17 database. GitHub Actions provisions PostgreSQL 17 and creates a restricted, non-superuser application role before running Maven. The tests verify Flyway migrations, application startup, HTTP health endpoints, and tenant isolation with PostgreSQL row-level security enabled and forced.
+The integration tests require a reachable PostgreSQL 17 database. GitHub Actions provisions separate restricted migration-owner and runtime roles before running Maven. Flyway uses the migration credentials; the application JDBC pool uses the runtime identity. The tests verify schema/table ownership, denied runtime DDL, explicit runtime DML, Flyway migrations, application startup, HTTP health endpoints, and tenant isolation with PostgreSQL row-level security enabled and forced.
 
 ## Start PostgreSQL locally
 ```bash
 docker compose -f deployment/compose/docker-compose.yml up -d postgres
 ```
 
-The local database listens on localhost:5432. The application connects as the restricted `axiom` role (default password: `axiom_dev_only`). The separate `axiom_admin` role is used only to initialize the local database. These credentials are for local development only.
+The local database listens on localhost:5432. The application connects as the restricted `axiom_app` runtime role (default password: `axiom_dev_only`). Flyway connects as the separate `axiom_migrator` schema-owner role (default password: `axiom_migrator_dev_only`). The PostgreSQL `axiom_admin` role is used only to initialize the local database. These credentials are for local development only.
 
-The initialization SQL runs only when PostgreSQL creates a new data directory. If you already have a database volume from an earlier version, do not delete it if it contains data. Create the restricted role manually as a PostgreSQL administrator:
+The initialization SQL runs only when PostgreSQL creates a new data directory. If you already have a database volume from an earlier single-role setup, do not delete it. Connect as a PostgreSQL administrator and perform a one-time ownership transition before starting the updated application:
 
 ```sql
-CREATE ROLE axiom LOGIN PASSWORD 'axiom_dev_only'
+CREATE ROLE axiom_migrator LOGIN PASSWORD 'replace_with_local_migration_password'
     NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
-GRANT CONNECT, CREATE ON DATABASE axiom TO axiom;
+CREATE ROLE axiom_app LOGIN PASSWORD 'replace_with_local_runtime_password'
+    NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+GRANT CONNECT ON DATABASE axiom TO axiom_migrator, axiom_app;
+GRANT CREATE ON DATABASE axiom TO axiom_migrator;
+
+ALTER SCHEMA axiom OWNER TO axiom_migrator;
+ALTER TABLE axiom.flyway_schema_history OWNER TO axiom_migrator;
+ALTER TABLE axiom.tenant OWNER TO axiom_migrator;
+ALTER TABLE axiom.organization OWNER TO axiom_migrator;
+ALTER TABLE axiom.party OWNER TO axiom_migrator;
+ALTER TABLE axiom.party_role OWNER TO axiom_migrator;
+ALTER TABLE axiom.user_identity OWNER TO axiom_migrator;
+ALTER TABLE axiom.tenant_membership OWNER TO axiom_migrator;
+ALTER TABLE axiom.tenant_role OWNER TO axiom_migrator;
+ALTER TABLE axiom.permission OWNER TO axiom_migrator;
+ALTER TABLE axiom.role_permission OWNER TO axiom_migrator;
+ALTER TABLE axiom.membership_role OWNER TO axiom_migrator;
+ALTER TABLE axiom.party_contact_point OWNER TO axiom_migrator;
+
+GRANT USAGE ON SCHEMA axiom TO axiom_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE axiom_migrator IN SCHEMA axiom
+    GRANT SELECT ON TABLES TO axiom_app;
+
+-- Retire the previous single-purpose application login after confirming
+-- no other local process still uses it.
+ALTER ROLE axiom NOLOGIN;
+REVOKE CREATE, CONNECT ON DATABASE axiom FROM axiom;
 ```
+
+Set `AXIOM_DB_USERNAME` / `AXIOM_DB_PASSWORD` for the runtime connection and `AXIOM_FLYWAY_USERNAME` / `AXIOM_FLYWAY_PASSWORD` for Flyway. The migration identity owns schema objects and has database CREATE only because the immutable V1 migration executes `CREATE SCHEMA IF NOT EXISTS`; the runtime identity never receives database or schema CREATE. The runtime identity receives schema USAGE and explicit DML grants from migrations. Future migrations must grant write privileges explicitly for each new runtime table. Flyway schema creation is disabled, so the `axiom` schema must be provisioned by the database administrator or initialization script before startup.
 
 ## Run the application
 ```bash

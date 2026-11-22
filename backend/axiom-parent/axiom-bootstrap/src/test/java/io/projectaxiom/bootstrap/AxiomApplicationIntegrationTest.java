@@ -5,8 +5,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
 import io.projectaxiom.bootstrap.security.AxiomAuthenticationToken;
@@ -26,6 +28,7 @@ import io.projectaxiom.party.PartyContactPointService;
 import io.projectaxiom.party.PartyRole;
 import io.projectaxiom.party.PartyService;
 import io.projectaxiom.party.PartyType;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -52,6 +55,9 @@ class AxiomApplicationIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
+    private Flyway flyway;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @Autowired
@@ -76,12 +82,10 @@ class AxiomApplicationIntegrationTest {
                 Integer.class);
         assertThat(schemaCount).isEqualTo(1);
 
-        for (String version : Set.of("1", "2", "3", "4", "5")) {
-            Integer migrationCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = ? AND success = true",
-                    Integer.class, version);
-            assertThat(migrationCount).as("Flyway migration V" + version).isEqualTo(1);
-        }
+        Set<String> appliedVersions = Arrays.stream(flyway.info().applied())
+                .map(migration -> migration.getVersion().getVersion())
+                .collect(Collectors.toSet());
+        assertThat(appliedVersions).containsExactlyInAnyOrder("1", "2", "3", "4", "5", "6");
     }
 
     @Test
@@ -117,11 +121,109 @@ class AxiomApplicationIntegrationTest {
 
         Boolean requiredDatabasePrivileges = jdbcTemplate.queryForObject("""
                 SELECT has_database_privilege(current_user, current_database(), 'CONNECT')
-                    AND has_database_privilege(current_user, current_database(), 'CREATE')
+                    AND NOT has_database_privilege(current_user, current_database(), 'CREATE')
                 """, Boolean.class);
         assertThat(requiredDatabasePrivileges)
-                .as("application role must retain only the database access needed for connection and Flyway schema creation")
+                .as("runtime application role must connect but must not create database objects")
                 .isTrue();
+    }
+
+    @Test
+    void migrationRoleOwnsSchemaAndRuntimeRoleCannotOwnDatabaseObjects() {
+        assertThat(jdbcTemplate.queryForObject("SELECT current_user", String.class))
+                .isEqualTo("axiom_app");
+
+        Boolean migrationRoleRestricted = jdbcTemplate.queryForObject("""
+                SELECT rolcanlogin
+                    AND NOT rolsuper
+                    AND NOT rolcreaterole
+                    AND NOT rolcreatedb
+                    AND NOT rolreplication
+                    AND NOT rolbypassrls
+                    AND NOT rolinherit
+                FROM pg_roles
+                WHERE rolname = 'axiom_migrator'
+                """, Boolean.class);
+        assertThat(migrationRoleRestricted)
+                .as("migration role must be a dedicated non-administrative login")
+                .isTrue();
+
+        Boolean schemaOwnedByMigrator = jdbcTemplate.queryForObject("""
+                SELECT n.nspowner = r.oid
+                    AND has_schema_privilege('axiom_migrator', n.oid, 'CREATE')
+                    AND NOT has_schema_privilege(current_user, n.oid, 'CREATE')
+                    AND has_schema_privilege(current_user, n.oid, 'USAGE')
+                FROM pg_namespace n
+                CROSS JOIN pg_roles r
+                WHERE n.nspname = 'axiom' AND r.rolname = 'axiom_migrator'
+                """, Boolean.class);
+        assertThat(schemaOwnedByMigrator)
+                .as("migration role must own the schema while runtime receives usage only")
+                .isTrue();
+        Boolean migrationRoleHasRequiredDdl = jdbcTemplate.queryForObject("""
+                SELECT has_database_privilege('axiom_migrator', current_database(), 'CREATE')
+                    AND has_schema_privilege('axiom_migrator', 'axiom', 'CREATE')
+                """, Boolean.class);
+        assertThat(migrationRoleHasRequiredDdl)
+                .as("only the migration identity receives database/schema CREATE required by the existing V1 schema migration")
+                .isTrue();
+
+        Integer runtimeOwnedObjects = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'axiom'
+                  AND c.relkind IN ('r', 'p', 'v', 'm', 'S')
+                  AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+                """, Integer.class);
+        assertThat(runtimeOwnedObjects)
+                .as("runtime role must not own tables, views or sequences in the application schema")
+                .isZero();
+
+        Integer objectsNotOwnedByMigrator = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'axiom'
+                  AND c.relkind IN ('r', 'p', 'v', 'm', 'S')
+                  AND c.relowner <> (SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator')
+                """, Integer.class);
+        assertThat(objectsNotOwnedByMigrator)
+                .as("all application schema relations must be owned by the migration identity")
+                .isZero();
+
+        Boolean runtimeHasNoDatabaseDdl = jdbcTemplate.queryForObject("""
+                SELECT NOT has_database_privilege(current_user, current_database(), 'CREATE')
+                    AND NOT has_table_privilege(current_user, 'axiom.flyway_schema_history', 'SELECT')
+                    AND has_table_privilege(current_user, 'axiom.party', 'SELECT')
+                    AND has_table_privilege(current_user, 'axiom.party', 'INSERT')
+                    AND has_table_privilege(current_user, 'axiom.party', 'UPDATE')
+                    AND has_table_privilege(current_user, 'axiom.party', 'DELETE')
+                    AND has_table_privilege(current_user, 'axiom.permission', 'SELECT')
+                    AND NOT has_table_privilege(current_user, 'axiom.permission', 'INSERT')
+                    AND NOT has_table_privilege(current_user, 'axiom.permission', 'UPDATE')
+                    AND NOT has_table_privilege(current_user, 'axiom.permission', 'DELETE')
+                """, Boolean.class);
+        assertThat(runtimeHasNoDatabaseDdl)
+                .as("runtime receives business-table DML, read-only permission catalogue access and no Flyway history access")
+                .isTrue();
+
+        Boolean migrationRoleHasNoMemberships = jdbcTemplate.queryForObject("""
+                SELECT NOT EXISTS (
+                    SELECT 1 FROM pg_auth_members
+                    WHERE member = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator')
+                )
+                """, Boolean.class);
+        assertThat(migrationRoleHasNoMemberships)
+                .as("migration role must not inherit or SET ROLE to another role")
+                .isTrue();
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+            assertThatThrownBy(() -> jdbcTemplate.execute(
+                    "ALTER TABLE axiom.party DISABLE ROW LEVEL SECURITY"))
+                    .isInstanceOf(org.springframework.dao.DataAccessException.class);
+            transaction.setRollbackOnly();
+        });
     }
 
     @Test
