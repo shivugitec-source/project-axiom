@@ -251,6 +251,6 @@
 
 ### Engineering E-14 — Enforce tenant-consistent foreign keys
 - Extended PostgreSQL catalog integration coverage so every tenant-owned table must declare `tenant_id NOT NULL`.
-- Added a catalog invariant for every foreign key targeting an application table with `tenant_id`: the referencing and referenced key columns must both include `tenant_id`. This prevents a future relationship from linking a row to another tenant's record using only a globally unique row ID.
-- The check covers organization hierarchy, Party relationships, tenant memberships/roles and contact points without imposing tenant columns on intentional references to global identity or permission catalogues.
+- Added a catalog invariant for every foreign key targeting an application table with `tenant_id`: the referencing `tenant_id` must map to the referenced `tenant_id` at the same ordinal position in the composite key. Merely having a tenant column somewhere on both sides is insufficient because a misordered pair could bind it to a different target column.
+- Added a PostgreSQL temporary-table regression fixture with a deliberately misordered composite foreign key; the catalog check must identify it as unsafe. The check also covers organization hierarchy, Party relationships, tenant memberships/roles and contact points without imposing tenant columns on intentional references to global identity or permission catalogues.
 - Test-only invariant; no production schema, migration, database privilege, RLS policy or API behavior changed.
