@@ -486,7 +486,9 @@ class AxiomApplicationIntegrationTest {
 
             assertThat(findUnsafeTenantForeignKeys(temporarySchema))
                     .as("tenant_id at source key position 1 must not reference a non-tenant target column at position 1")
-                    .containsExactly("pg_temp_3.fk_source_position_fixture -> pg_temp_3.fk_target_position_fixture (fk_source_position_fixture_target)");
+                    .containsExactly(temporarySchema
+                            + ".fk_source_position_fixture -> " + temporarySchema
+                            + ".fk_target_position_fixture (fk_source_position_fixture_target)");
         });
     }
 
