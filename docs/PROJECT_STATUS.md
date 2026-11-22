@@ -261,3 +261,9 @@
 - Added PostgreSQL integration coverage using one physical JDBC connection: it sets `axiom.tenant_id` transaction-locally, confirms the tenant's rows are visible, commits, and confirms the same connection sees no tenant rows in the next transaction.
 - Repeats the assertion across rollback, verifying both transaction completion paths clear tenant scope before the connection can be reused by another request.
 - This is test-only coverage of the existing `set_config(..., true)` contract; it does not change production RLS policies, migrations, credentials, database grants or API behavior.
+
+
+### Engineering E-16 — Reject ambiguous tenant selector headers
+- Hardened the OIDC tenant-context filter to enumerate all `X-Tenant-ID` header values instead of reading only the first value. A request with multiple values is rejected with HTTP 400 before membership lookup; an explicitly present but blank value is also rejected rather than treated as an absent selector.
+- Added regression tests for duplicate and blank header values and asserted that neither request reaches tenant membership verification or the downstream filter chain.
+- This closes a request-parsing ambiguity at the tenant boundary without changing valid single-UUID selection, membership authorization, RLS behavior, database schema or API permissions.
