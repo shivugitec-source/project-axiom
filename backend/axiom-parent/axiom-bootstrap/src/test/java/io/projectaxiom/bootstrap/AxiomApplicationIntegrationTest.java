@@ -5,8 +5,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
 import io.projectaxiom.bootstrap.security.AxiomAuthenticationToken;
@@ -26,6 +28,7 @@ import io.projectaxiom.party.PartyContactPointService;
 import io.projectaxiom.party.PartyRole;
 import io.projectaxiom.party.PartyService;
 import io.projectaxiom.party.PartyType;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -52,6 +55,9 @@ class AxiomApplicationIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
+    private Flyway flyway;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @Autowired
@@ -76,12 +82,10 @@ class AxiomApplicationIntegrationTest {
                 Integer.class);
         assertThat(schemaCount).isEqualTo(1);
 
-        for (String version : Set.of("1", "2", "3", "4", "5", "6")) {
-            Integer migrationCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM axiom.flyway_schema_history WHERE version = ? AND success = true",
-                    Integer.class, version);
-            assertThat(migrationCount).as("Flyway migration V" + version).isEqualTo(1);
-        }
+        Set<String> appliedVersions = Arrays.stream(flyway.info().applied())
+                .map(migration -> migration.getVersion().getVersion())
+                .collect(Collectors.toSet());
+        assertThat(appliedVersions).containsExactlyInAnyOrder("1", "2", "3", "4", "5", "6");
     }
 
     @Test
