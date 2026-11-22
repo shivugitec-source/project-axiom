@@ -348,6 +348,17 @@ class AxiomApplicationIntegrationTest {
                 "tenant_role");
 
         for (String table : tenantTables) {
+            Boolean tenantIdNotNull = jdbcTemplate.queryForObject("""
+                    SELECT is_nullable = 'NO'
+                    FROM information_schema.columns
+                    WHERE table_schema = 'axiom'
+                      AND table_name = ?
+                      AND column_name = 'tenant_id'
+                    """, Boolean.class, table);
+            assertThat(tenantIdNotNull)
+                    .as(table + " tenant_id must be NOT NULL")
+                    .isTrue();
+
             Boolean forcedRls = jdbcTemplate.queryForObject("""
                     SELECT c.relrowsecurity AND c.relforcerowsecurity
                     FROM pg_class c
@@ -390,6 +401,95 @@ class AxiomApplicationIntegrationTest {
                     .as(table + " WITH CHECK must compare tenant_id to the transaction tenant")
                     .isEqualTo(EXPECTED_TENANT_POLICY_EXPRESSION);
         }
+    }
+
+    private static final String UNSAFE_TENANT_FOREIGN_KEYS_SQL = """
+            SELECT format(
+                '%I.%I -> %I.%I (%I)',
+                source_schema.nspname,
+                source_table.relname,
+                target_schema.nspname,
+                target_table.relname,
+                constraint_row.conname
+            )
+            FROM pg_constraint constraint_row
+            JOIN pg_class source_table ON source_table.oid = constraint_row.conrelid
+            JOIN pg_namespace source_schema ON source_schema.oid = source_table.relnamespace
+            JOIN pg_class target_table ON target_table.oid = constraint_row.confrelid
+            JOIN pg_namespace target_schema ON target_schema.oid = target_table.relnamespace
+            WHERE constraint_row.contype = 'f'
+              AND source_schema.nspname = ?
+              AND target_schema.nspname = ?
+              AND EXISTS (
+                  SELECT 1
+                  FROM pg_attribute target_tenant_column
+                  WHERE target_tenant_column.attrelid = target_table.oid
+                    AND target_tenant_column.attname = 'tenant_id'
+                    AND target_tenant_column.attnum > 0
+                    AND NOT target_tenant_column.attisdropped
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM unnest(constraint_row.conkey, constraint_row.confkey)
+                       WITH ORDINALITY AS key_pair(source_attnum, target_attnum, key_position)
+                  JOIN pg_attribute source_column
+                    ON source_column.attrelid = source_table.oid
+                   AND source_column.attnum = key_pair.source_attnum
+                  JOIN pg_attribute target_column
+                    ON target_column.attrelid = target_table.oid
+                   AND target_column.attnum = key_pair.target_attnum
+                  WHERE source_column.attname = 'tenant_id'
+                    AND target_column.attname = 'tenant_id'
+                    AND NOT source_column.attisdropped
+                    AND NOT target_column.attisdropped
+              )
+            ORDER BY source_table.relname, constraint_row.conname
+            """;
+
+    private List<String> findUnsafeTenantForeignKeys(String schema) {
+        return jdbcTemplate.queryForList(
+                UNSAFE_TENANT_FOREIGN_KEYS_SQL, String.class, schema, schema);
+    }
+
+    @Test
+    void foreignKeysToTenantOwnedTablesPreserveTenantId() {
+        assertThat(findUnsafeTenantForeignKeys("axiom"))
+                .as("foreign keys targeting tenant-owned tables must map tenant_id to tenant_id at the same key position")
+                .isEmpty();
+    }
+
+    @Test
+    void foreignKeysCannotMapTenantIdToAnotherReferencedColumnPosition() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+            jdbcTemplate.execute("""
+                    CREATE TEMP TABLE fk_target_position_fixture (
+                        id UUID NOT NULL,
+                        tenant_id UUID NOT NULL,
+                        CONSTRAINT uq_fk_target_position_fixture UNIQUE (id, tenant_id)
+                    ) ON COMMIT DROP
+                    """);
+            jdbcTemplate.execute("""
+                    CREATE TEMP TABLE fk_source_position_fixture (
+                        tenant_id UUID NOT NULL,
+                        target_id UUID NOT NULL,
+                        CONSTRAINT fk_source_position_fixture_target
+                            FOREIGN KEY (tenant_id, target_id)
+                            REFERENCES fk_target_position_fixture (id, tenant_id)
+                    ) ON COMMIT DROP
+                    """);
+
+            String temporarySchema = jdbcTemplate.queryForObject("""
+                    SELECT nspname
+                    FROM pg_namespace
+                    WHERE oid = pg_my_temp_schema()
+                    """, String.class);
+
+            assertThat(findUnsafeTenantForeignKeys(temporarySchema))
+                    .as("tenant_id at source key position 1 must not reference a non-tenant target column at position 1")
+                    .containsExactly(temporarySchema
+                            + ".fk_source_position_fixture -> " + temporarySchema
+                            + ".fk_target_position_fixture (fk_source_position_fixture_target)");
+        });
     }
 
     @Test
