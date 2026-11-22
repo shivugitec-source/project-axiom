@@ -7,6 +7,9 @@ CREATE ROLE axiom_app LOGIN PASSWORD 'axiom_dev_only'
     NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
 
 GRANT CONNECT ON DATABASE axiom TO axiom_migrator, axiom_app;
+-- Immutable V1 uses CREATE SCHEMA IF NOT EXISTS and requires database CREATE.
+-- This is granted only to the migration identity, never to the runtime role.
+GRANT CREATE ON DATABASE axiom TO axiom_migrator;
 CREATE SCHEMA axiom AUTHORIZATION axiom_migrator;
 GRANT USAGE ON SCHEMA axiom TO axiom_app;
 
