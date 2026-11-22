@@ -13,6 +13,9 @@ Run from the repository root after starting the local PostgreSQL service (see be
 python3 backend/verify-module-dependencies.py
 python3 -m unittest discover -s backend/tests -p 'test_*.py' -v
 mvn -B -DskipTests clean package -f backend/axiom-parent/pom.xml
+python3 backend/verify-migration-artifacts.py \
+  backend/axiom-parent/axiom-bootstrap/target/axiom-bootstrap-0.1.0-SNAPSHOT.jar \
+  backend/axiom-parent/axiom-migrator/target/axiom-migrator-0.1.0-SNAPSHOT.jar
 AXIOM_MIGRATION_DB_URL=jdbc:postgresql://localhost:5432/axiom \
 AXIOM_MIGRATION_DB_USERNAME=axiom_migrator \
 AXIOM_MIGRATION_DB_PASSWORD=axiom_migrator_dev_only \
@@ -23,7 +26,7 @@ AXIOM_DB_PASSWORD=axiom_dev_only \
 mvn -B verify -f backend/axiom-parent/pom.xml
 ```
 
-The architecture check validates the API's inward-only Maven module graph and keeps the standalone migrator isolated with no internal module dependencies. Its regression tests use temporary POM fixtures to verify that reverse dependencies, inherited/profile dependencies, duplicate edges, missing modules and malformed POMs are rejected. Additional tests ensure Flyway dependencies and migration credentials stay outside the API artifact and process.
+The architecture check validates the API's inward-only Maven module graph and keeps the standalone migrator isolated with no internal module dependencies. Its regression tests use temporary POM fixtures to verify that reverse dependencies, inherited/profile dependencies, duplicate edges, missing modules and malformed POMs are rejected. Additional tests ensure Flyway dependencies and migration credentials stay outside the API artifact and process. After Maven packages the executable JARs, `backend/verify-migration-artifacts.py` inspects their actual contents: the API must contain no Flyway libraries, migration SQL or migration-only environment references, while the standalone migrator must contain Flyway, versioned migration resources and its expected entry point without depending on API modules.
 
 The integration tests require a reachable PostgreSQL 17 database. GitHub Actions provisions separate restricted migration-owner and runtime roles, builds the standalone `axiom-migrator` artifact, and runs it as a one-shot process with migration credentials. The subsequent API build and integration tests receive only runtime credentials. The tests verify schema/table ownership, denied runtime DDL, explicit runtime DML, the pre-migrated schema, application startup, HTTP health endpoints, and tenant isolation with PostgreSQL row-level security enabled and forced.
 

@@ -56,6 +56,11 @@ jobs:
           SQL
       - name: Build the isolated migration artifact
         run: mvn -B -ntp -DskipTests clean package -f backend/axiom-parent/pom.xml
+      - name: Verify packaged API and migrator boundaries
+        run: |
+          python3 backend/verify-migration-artifacts.py \
+            backend/axiom-parent/axiom-bootstrap/target/axiom-bootstrap-0.1.0-SNAPSHOT.jar \
+            backend/axiom-parent/axiom-migrator/target/axiom-migrator-0.1.0-SNAPSHOT.jar
       - name: Run Flyway in a dedicated migration process
         env:
           AXIOM_MIGRATION_DB_URL: jdbc:postgresql://localhost:5432/axiom

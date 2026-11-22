@@ -25,4 +25,5 @@ The repository currently has no production container image or orchestrator-speci
 - New databases no longer grant database-wide CREATE to `axiom_migrator`.
 - Existing databases with V1 already recorded do not need a checksum change. Their migration role must have database CREATE revoked by an administrator before using the new migrator.
 - Deployment owners must run the migrator as a pre-start job and must not inject migration credentials into API workloads.
+- CI inspects the built executable JARs, not only their Maven declarations: the API package must exclude Flyway libraries, migration SQL and migration-only environment references; the standalone migrator must contain Flyway and versioned migrations, expose the expected entry point, and have no internal API module dependencies.
 - The repository provides a runnable migration artifact and CI proof, but production image publication, job orchestration, ordering, retry policy and rollout coordination remain deployment-platform decisions. No infrastructure is deployed by this ADR.
