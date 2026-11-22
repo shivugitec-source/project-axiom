@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the declared Maven dependency direction of the Axiom modular monolith."""
+"""Verify the declared Maven dependency direction and source layout of the Axiom modular monolith."""
 
 from pathlib import Path
 import sys
@@ -101,15 +101,40 @@ def internal_dependencies(
     return found, errors
 
 
+def verify_source_layout(repository_root: Path) -> list[str]:
+    """Reject source/resource trees that Maven does not build as declared modules."""
+    backend_root = repository_root / "backend"
+    module_roots = tuple(
+        (repository_root / POM_ROOT / module).resolve()
+        for module in EXPECTED_MODULES
+    )
+    errors: list[str] = []
+
+    for source_root in sorted(backend_root.rglob("src")):
+        if not source_root.is_dir():
+            continue
+        for source_file in sorted(source_root.rglob("*")):
+            if not source_file.is_file():
+                continue
+            resolved_file = source_file.resolve()
+            if not any(resolved_file.is_relative_to(module_root) for module_root in module_roots):
+                errors.append(
+                    "Source/resource file is outside a declared Maven module and will not "
+                    f"be built by the reactor: {source_file.relative_to(repository_root)}"
+                )
+    return errors
+
+
 def verify_repository(repository_root: Path) -> list[str]:
     errors: list[str] = []
+    errors.extend(verify_source_layout(repository_root))
     pom_root = repository_root / POM_ROOT
     parent_path = pom_root / "pom.xml"
 
     try:
         parent_pom = parse_pom(parent_path, repository_root)
     except ValueError as exc:
-        return [str(exc)]
+        return errors + [str(exc)]
 
     declared_modules = tuple(
         (module.text or "").strip()
@@ -169,13 +194,14 @@ def main() -> int:
             print(f" - {error}", file=sys.stderr)
         return 1
 
-    print("Modular-monolith dependency boundaries verified:")
+    print("Modular-monolith dependency boundaries and Maven source layout verified:")
     for module in EXPECTED_MODULES:
         dependencies = sorted(ALLOWED_INTERNAL_DEPENDENCIES[module])
         print(
             f" - {module}: "
             f"{', '.join(dependencies) if dependencies else '(no internal dependencies)'}"
         )
+    print(" - all backend src trees belong to declared Maven modules")
     return 0
 
 

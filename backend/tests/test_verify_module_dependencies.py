@@ -128,6 +128,42 @@ class VerifyModuleDependenciesTests(unittest.TestCase):
         )
         self.assertEqual([], verifier.verify_repository(self.root))
 
+    def test_declared_maven_module_sources_are_allowed(self) -> None:
+        self.write_fixture(
+            module_dependencies={
+                module: sorted(dependencies)
+                for module, dependencies in verifier.ALLOWED_INTERNAL_DEPENDENCIES.items()
+            }
+        )
+        source = (
+            self.root / verifier.POM_ROOT / "axiom-migrator"
+            / "src" / "test" / "java" / "ExampleTest.java"
+        )
+        source.parent.mkdir(parents=True)
+        source.write_text("class ExampleTest {}", encoding="utf-8")
+        self.assertEqual([], verifier.verify_repository(self.root))
+
+    def test_unmanaged_source_and_resource_trees_fail(self) -> None:
+        self.write_fixture(
+            module_dependencies={
+                module: sorted(dependencies)
+                for module, dependencies in verifier.ALLOWED_INTERNAL_DEPENDENCIES.items()
+            }
+        )
+        orphan_root = self.root / "backend" / "axiom-migrator" / "src"
+        java_source = orphan_root / "test" / "java" / "ExampleTest.java"
+        migration = orphan_root / "main" / "resources" / "db" / "migration" / "V1__old.sql"
+        java_source.parent.mkdir(parents=True)
+        migration.parent.mkdir(parents=True)
+        java_source.write_text("class ExampleTest {}", encoding="utf-8")
+        migration.write_text("CREATE SCHEMA axiom;", encoding="utf-8")
+
+        errors = verifier.verify_repository(self.root)
+        unmanaged = [error for error in errors if "outside a declared Maven module" in error]
+        self.assertEqual(2, len(unmanaged))
+        self.assertTrue(any("ExampleTest.java" in error for error in unmanaged))
+        self.assertTrue(any("V1__old.sql" in error for error in unmanaged))
+
     def test_migrator_cannot_depend_on_api_or_bootstrap(self) -> None:
         self.write_fixture(module_dependencies={"axiom-migrator": ["axiom-bootstrap"]})
         errors = verifier.verify_repository(self.root)
