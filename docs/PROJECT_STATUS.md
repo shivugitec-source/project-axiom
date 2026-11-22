@@ -6,7 +6,7 @@
 - Version: 0.1.0-SNAPSHOT
 - Architecture: Modular monolith
 - Repository: https://github.com/shivugitec-source/project-axiom
-- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests, Party contact points, modular-monolith dependency enforcement with regression tests, a database-backed invariant for forced tenant-scoped RLS on every tenant-owned table, and PostgreSQL assertions that the runtime application role cannot bypass RLS, exercise database-administration privileges or assume another database role are merged. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
+- Status: Infrastructure, Organization, Party, IAM data, OIDC token authentication, provider-neutral identity mapping, active membership verification, membership-verified request tenant context, tenant permission enforcement, end-to-end HTTP/OIDC security tests, Party contact points, modular-monolith dependency enforcement with regression tests, a database-backed invariant for forced tenant-scoped RLS on every tenant-owned table, and PostgreSQL assertions that the application connection role lacks SUPERUSER/BYPASSRLS/admin attributes and direct role memberships are merged. A separate migration-owner/runtime-role boundary is still outstanding. Tenant controllers remain local-profile only pending platform tenant-provisioning authorization and production OIDC readiness.
 
 ## Completed foundations
 
@@ -135,8 +135,11 @@
 - Main CI #216 passed on merge commit `532cd0b20084f4fc638e644d25cb5c844740fac4` with the same 36-test result.
 - PR #28 was squash-merged as `7ff9d3aca61e2b0a0f93731c00defa18640b98d2` after PR CI #219 passed on exact head `57cddf03eded2eb1a7daec72be2633dbee0940fa`; the integration invariant also rejects direct membership in another PostgreSQL role, preventing `SET ROLE` privilege escalation.
 - Main CI #220 passed on merge commit `7ff9d3aca61e2b0a0f93731c00defa18640b98d2`; PostgreSQL 17-backed Maven verification reported 36 tests with zero failures, errors or skips and `BUILD SUCCESS`.
+- Security limitation identified during review: `application.yml` does not configure separate Flyway credentials, so Flyway currently uses the application datasource identity. That identity creates and owns the schema objects and can therefore perform DDL, including changing table policies; the role-attribute and membership assertions do not remove this ownership capability.
+- Required follow-up: separate a migration-owner identity from the runtime login, grant runtime only schema usage and required DML, and add PostgreSQL tests proving the runtime role does not own tenant tables and cannot perform schema/table DDL. Do not describe the current role as fully unable to alter RLS.
 
 ## Not yet implemented
+- Separate Flyway migration ownership from the runtime application identity. The current single datasource means the application identity owns migrated objects; the runtime role must not retain DDL capability in the final least-privilege model.
 - Define and document the next business-domain capability (business purpose, actors, lifecycle, invariants, fields, workflows and API acceptance) before adding speculative domain entities. The current README lists target industries but no detailed business requirements or ADRs define the next slice.
 - Define and implement platform-level tenant provisioning authorization only after its authority, approval and audit policy is established.
 - Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
@@ -162,6 +165,7 @@
 - Tenant controllers remain local-profile only. No production endpoint exposure is added.
 
 ## Next implementation sequence
-1. Select the next business-domain capability only when its lifecycle, invariants and API contract are supported by documented requirements. The current README lists target industries but does not define their business rules; do not invent a domain slice.
-2. Define platform-level tenant-provisioning authorization, including authority, approval and audit requirements, before implementing tenant creation.
-3. Review real production OIDC issuer/audience configuration and operational readiness before any production tenant API exposure.
+1. Separate migration-owner and runtime database identities, grant only the runtime schema/DML privileges required, and prove the runtime identity cannot own or alter tenant tables.
+2. Select the next business-domain capability only when its lifecycle, invariants and API contract are supported by documented requirements. The current README lists target industries but does not define their business rules; do not invent a domain slice.
+3. Define platform-level tenant-provisioning authorization, including authority, approval and audit requirements, before implementing tenant creation.
+4. Review real production OIDC issuer/audience configuration and operational readiness before any production tenant API exposure.
