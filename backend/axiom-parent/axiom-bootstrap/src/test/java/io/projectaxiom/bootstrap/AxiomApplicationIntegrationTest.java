@@ -227,6 +227,42 @@ class AxiomApplicationIntegrationTest {
     }
 
     @Test
+    void futureTablesDefaultToRuntimeReadOnlyPrivileges() {
+        Boolean runtimeDefaultsAreReadOnly = jdbcTemplate.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_default_acl d
+                    CROSS JOIN LATERAL aclexplode(d.defaclacl) acl_entry
+                    WHERE d.defaclrole = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator')
+                      AND d.defaclnamespace = 'axiom'::regnamespace
+                      AND d.defaclobjtype = 'r'
+                      AND acl_entry.grantee = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
+                      AND acl_entry.privilege_type = 'SELECT'
+                      AND NOT acl_entry.is_grantable
+                )
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM pg_default_acl d
+                    CROSS JOIN LATERAL aclexplode(d.defaclacl) acl_entry
+                    WHERE d.defaclrole = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator')
+                      AND d.defaclnamespace IN (0, 'axiom'::regnamespace)
+                      AND d.defaclobjtype = 'r'
+                      AND (
+                          acl_entry.grantee = 0
+                          OR (
+                              acl_entry.grantee = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
+                              AND (acl_entry.privilege_type <> 'SELECT' OR acl_entry.is_grantable)
+                          )
+                      )
+                )
+                """, Boolean.class);
+
+        assertThat(runtimeDefaultsAreReadOnly)
+                .as("future migration-created tables must be readable but not writable by default")
+                .isTrue();
+    }
+
+    @Test
     void everyTenantOwnedTableHasForcedTenantScopedRlsPolicies() {
         List<String> tenantTables = jdbcTemplate.queryForList("""
                 SELECT DISTINCT table_name
