@@ -306,6 +306,29 @@ class AxiomApplicationIntegrationTest {
     }
 
     @Test
+    void applicationTablesWithoutTenantIdAreExplicitlyGlobal() {
+        List<String> globalTables = jdbcTemplate.queryForList("""
+                SELECT t.table_name
+                FROM information_schema.tables t
+                WHERE t.table_schema = 'axiom'
+                  AND t.table_type = 'BASE TABLE'
+                  AND t.table_name <> 'flyway_schema_history'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM information_schema.columns c
+                      WHERE c.table_schema = t.table_schema
+                        AND c.table_name = t.table_name
+                        AND c.column_name = 'tenant_id'
+                  )
+                ORDER BY t.table_name
+                """, String.class);
+
+        assertThat(globalTables)
+                .as("only explicitly approved global tables may omit tenant_id; new tables must be tenant-scoped or deliberately reviewed")
+                .containsExactlyInAnyOrder("permission", "tenant", "user_identity");
+    }
+
+    @Test
     void everyTenantOwnedTableHasForcedTenantScopedRlsPolicies() {
         List<String> tenantTables = jdbcTemplate.queryForList("""
                 SELECT DISTINCT table_name
