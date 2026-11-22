@@ -7,7 +7,7 @@
 - Python 3.10+ (standard library only) for architecture verification
 
 ## Build and test
-Run from the repository root:
+Run from the repository root after starting the local PostgreSQL service (see below). The sequence builds the artifacts, runs migrations as a separate process, then runs the integration suite with runtime credentials only:
 
 ```bash
 python3 backend/verify-module-dependencies.py
