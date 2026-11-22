@@ -22,7 +22,7 @@ INTERNAL_MODULE_ARTIFACTS = (
     "BOOT-INF/lib/axiom-bootstrap-",
 )
 MIGRATION_RESOURCE = re.compile(
-    r"^BOOT-INF/classes/db/migration/V([0-9]+(?:\\.[0-9]+)*)__[^/]+\\.sql$"
+    r"^BOOT-INF/classes/db/migration/V([0-9]+(?:\.[0-9]+)*)__[^/]+\.sql$"
 )
 EXPECTED_MIGRATOR_MAIN = "io.projectaxiom.migrator.AxiomMigratorApplication"
 
@@ -48,7 +48,7 @@ def read_archive(path: Path) -> tuple[set[str], str, list[str]]:
 
 def manifest_attributes(manifest: str) -> dict[str, str]:
     """Parse main manifest attributes, including continuation lines."""
-    unfolded = re.sub(r"\\r?\\n ", "", manifest)
+    unfolded = re.sub(r"\r?\n ", "", manifest)
     attributes: dict[str, str] = {}
     for line in unfolded.splitlines():
         if not line or line.startswith(" "):
