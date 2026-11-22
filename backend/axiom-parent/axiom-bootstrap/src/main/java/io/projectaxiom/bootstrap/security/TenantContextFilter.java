@@ -1,6 +1,7 @@
 package io.projectaxiom.bootstrap.security;
 
 import java.io.IOException;
+import java.util.Enumeration;
 import java.util.UUID;
 
 import io.projectaxiom.common.TenantContext;
@@ -30,9 +31,16 @@ public final class TenantContextFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String requestedTenant = request.getHeader(TENANT_HEADER);
-        if (requestedTenant == null || requestedTenant.isBlank()) {
+        Enumeration<String> tenantHeaders = request.getHeaders(TENANT_HEADER);
+        if (tenantHeaders == null || !tenantHeaders.hasMoreElements()) {
             filterChain.doFilter(request, response);
+            return;
+        }
+
+        String requestedTenant = tenantHeaders.nextElement();
+        if (tenantHeaders.hasMoreElements() || requestedTenant == null || requestedTenant.isBlank()) {
+            response.sendError(HttpStatus.BAD_REQUEST.value(),
+                    "X-Tenant-ID must be supplied exactly once as a nonblank UUID");
             return;
         }
 

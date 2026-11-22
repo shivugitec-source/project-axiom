@@ -74,6 +74,35 @@ class TenantContextFilterTest {
 
 
     @Test
+    void rejectsDuplicateTenantHeadersAsAmbiguous() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(TenantContextFilter.TENANT_HEADER, UUID.randomUUID().toString());
+        request.addHeader(TenantContextFilter.TENANT_HEADER, UUID.randomUUID().toString());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, (req, res) -> {
+            throw new AssertionError("ambiguous tenant selector must not continue");
+        });
+
+        assertThat(response.getStatus()).isEqualTo(400);
+        verify(identityService, never()).hasActiveMembership(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void rejectsBlankTenantHeaderInsteadOfTreatingItAsAbsent() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request("  "), response, (req, res) -> {
+            throw new AssertionError("blank tenant selector must not continue");
+        });
+
+        assertThat(response.getStatus()).isEqualTo(400);
+        verify(identityService, never()).hasActiveMembership(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void rejectsTenantSelectorWithoutAuthenticatedAxiomPrincipal() throws Exception {
         UUID tenantId = UUID.randomUUID();
         MockHttpServletResponse response = new MockHttpServletResponse();
