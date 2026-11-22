@@ -17,7 +17,7 @@ mvn -B clean verify -f backend/axiom-parent/pom.xml
 
 The architecture check validates the approved inward-only Maven module graph. Its regression tests use temporary POM fixtures to verify that reverse dependencies, inherited/profile dependencies, duplicate edges, missing modules and malformed POMs are rejected.
 
-The integration tests require a reachable PostgreSQL 17 database. GitHub Actions provisions PostgreSQL 17 and creates a restricted, non-superuser application role before running Maven. The tests verify Flyway migrations, application startup, HTTP health endpoints, and tenant isolation with PostgreSQL row-level security enabled and forced.
+The integration tests require a reachable PostgreSQL 17 database. GitHub Actions provisions separate restricted migration-owner and runtime roles before running Maven. Flyway uses the migration credentials; the application JDBC pool uses the runtime identity. The tests verify schema/table ownership, denied runtime DDL, explicit runtime DML, Flyway migrations, application startup, HTTP health endpoints, and tenant isolation with PostgreSQL row-level security enabled and forced.
 
 ## Start PostgreSQL locally
 ```bash
@@ -60,6 +60,7 @@ REVOKE CREATE, CONNECT ON DATABASE axiom FROM axiom;
 ```
 
 Set `AXIOM_DB_USERNAME` / `AXIOM_DB_PASSWORD` for the runtime connection and `AXIOM_FLYWAY_USERNAME` / `AXIOM_FLYWAY_PASSWORD` for Flyway. The migration identity owns schema objects; the runtime identity receives schema USAGE and explicit DML grants from migrations. Future migrations must grant write privileges explicitly for each new runtime table. Flyway schema creation is disabled, so the `axiom` schema must be provisioned by the database administrator or initialization script before startup.
+
 ## Run the application
 ```bash
 mvn -f backend/axiom-parent/pom.xml -pl axiom-bootstrap -am spring-boot:run
