@@ -1,14 +1,17 @@
 """Regression tests for the modular-monolith dependency verifier."""
 
 from pathlib import Path
-import sys
+import importlib.util
 import tempfile
 import unittest
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BACKEND_DIR))
-
-import verify_module_dependencies as verifier
+VERIFIER_PATH = BACKEND_DIR / "verify-module-dependencies.py"
+SPEC = importlib.util.spec_from_file_location("verify_module_dependencies", VERIFIER_PATH)
+if SPEC is None or SPEC.loader is None:
+    raise RuntimeError(f"Cannot load dependency verifier from {VERIFIER_PATH}")
+verifier = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(verifier)
 
 
 MAVEN_NAMESPACE = "http://maven.apache.org/POM/4.0.0"
