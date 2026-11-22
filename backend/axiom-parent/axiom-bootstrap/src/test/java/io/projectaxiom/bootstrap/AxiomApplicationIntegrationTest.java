@@ -232,25 +232,25 @@ class AxiomApplicationIntegrationTest {
                 SELECT EXISTS (
                     SELECT 1
                     FROM pg_default_acl d
-                    CROSS JOIN LATERAL aclexplode(d.defaclacl) privilege
+                    CROSS JOIN LATERAL aclexplode(d.defaclacl) acl_entry
                     WHERE d.defaclrole = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator')
                       AND d.defaclnamespace = 'axiom'::regnamespace
                       AND d.defaclobjtype = 'r'
-                      AND privilege.grantee = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
-                      AND privilege.privilege_type = 'SELECT'
-                      AND NOT privilege.is_grantable
+                      AND acl_entry.grantee = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
+                      AND acl_entry.privilege_type = 'SELECT'
+                      AND NOT acl_entry.is_grantable
                 )
                 AND NOT EXISTS (
                     SELECT 1
                     FROM pg_default_acl d
-                    CROSS JOIN LATERAL aclexplode(d.defaclacl) privilege
+                    CROSS JOIN LATERAL aclexplode(d.defaclacl) acl_entry
                     WHERE d.defaclrole = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator')
                       AND d.defaclnamespace = 'axiom'::regnamespace
                       AND d.defaclobjtype = 'r'
-                      AND privilege.grantee IN (
+                      AND acl_entry.grantee IN (
                           0, (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
                       )
-                      AND (privilege.privilege_type <> 'SELECT' OR privilege.is_grantable)
+                      AND (acl_entry.privilege_type <> 'SELECT' OR acl_entry.is_grantable)
                 )
                 """, Boolean.class);
 
