@@ -113,11 +113,6 @@
 - Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
 - Define the next business-domain slice from an explicit domain model/requirements before implementation; the README currently states broad industry goals but does not specify the next entity lifecycle or business rules.
 
-## Next implementation sequence
-1. Define platform-level authorization and approval rules for tenant provisioning.
-2. Review production OIDC issuer/audience configuration and operational readiness.
-3. Only then consider enabling selected tenant endpoints outside the local profile.
-
 ## Development rules
 - Keep the modular-monolith architecture.
 - Do not create a universal transaction table for unrelated business domains.
