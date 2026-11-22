@@ -55,6 +55,7 @@ jobs:
           CREATE ROLE axiom_app LOGIN PASSWORD 'axiom_ci_password'
               NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
           GRANT CONNECT ON DATABASE axiom TO axiom_migrator, axiom_app;
+          GRANT CREATE ON DATABASE axiom TO axiom_migrator;
           CREATE SCHEMA axiom AUTHORIZATION axiom_migrator;
           GRANT USAGE ON SCHEMA axiom TO axiom_app;
           ALTER DEFAULT PRIVILEGES FOR ROLE axiom_migrator IN SCHEMA axiom
