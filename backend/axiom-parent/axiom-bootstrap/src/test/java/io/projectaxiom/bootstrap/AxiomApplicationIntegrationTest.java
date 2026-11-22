@@ -141,7 +141,6 @@ class AxiomApplicationIntegrationTest {
                     AND NOT rolreplication
                     AND NOT rolbypassrls
                     AND NOT rolinherit
-                    AND NOT has_database_privilege('axiom_migrator', current_database(), 'CREATE')
                 FROM pg_roles
                 WHERE rolname = 'axiom_migrator'
                 """, Boolean.class);
@@ -160,6 +159,13 @@ class AxiomApplicationIntegrationTest {
                 """, Boolean.class);
         assertThat(schemaOwnedByMigrator)
                 .as("migration role must own the schema while runtime receives usage only")
+                .isTrue();
+        Boolean migrationRoleHasRequiredDdl = jdbcTemplate.queryForObject("""
+                SELECT has_database_privilege('axiom_migrator', current_database(), 'CREATE')
+                    AND has_schema_privilege('axiom_migrator', 'axiom', 'CREATE')
+                """, Boolean.class);
+        assertThat(migrationRoleHasRequiredDdl)
+                .as("only the migration identity receives database/schema CREATE required by the existing V1 schema migration")
                 .isTrue();
 
         Integer runtimeOwnedObjects = jdbcTemplate.queryForObject("""
