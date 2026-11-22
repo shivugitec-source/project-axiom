@@ -68,7 +68,7 @@ def validate_artifacts(api_path: Path, migrator_path: Path) -> list[str]:
     errors.extend(archive_errors)
     migrator_names, migrator_manifest, archive_errors = read_archive(migrator_path)
     errors.extend(archive_errors)
-    if archive_errors or not api_names or not migrator_names:
+    if errors or not api_names or not migrator_names:
         return errors
 
     api_flyway = sorted(
