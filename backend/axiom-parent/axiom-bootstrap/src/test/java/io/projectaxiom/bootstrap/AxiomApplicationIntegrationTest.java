@@ -227,6 +227,38 @@ class AxiomApplicationIntegrationTest {
     }
 
     @Test
+    void futureTablesDefaultToRuntimeReadOnlyPrivileges() {
+        Boolean runtimeDefaultsAreReadOnly = jdbcTemplate.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_default_acl d
+                    CROSS JOIN LATERAL aclexplode(d.defaclacl) privilege
+                    WHERE d.defaclrole = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator')
+                      AND d.defaclnamespace = 'axiom'::regnamespace
+                      AND d.defaclobjtype = 'r'
+                      AND privilege.grantee = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
+                      AND privilege.privilege_type = 'SELECT'
+                )
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM pg_default_acl d
+                    CROSS JOIN LATERAL aclexplode(d.defaclacl) privilege
+                    WHERE d.defaclrole = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator')
+                      AND d.defaclnamespace = 'axiom'::regnamespace
+                      AND d.defaclobjtype = 'r'
+                      AND privilege.grantee = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
+                      AND privilege.privilege_type IN (
+                          'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'
+                      )
+                )
+                """, Boolean.class);
+
+        assertThat(runtimeDefaultsAreReadOnly)
+                .as("future migration-created tables must be readable but not writable by default")
+                .isTrue();
+    }
+
+    @Test
     void everyTenantOwnedTableHasForcedTenantScopedRlsPolicies() {
         List<String> tenantTables = jdbcTemplate.queryForList("""
                 SELECT DISTINCT table_name
