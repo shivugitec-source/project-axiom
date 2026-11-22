@@ -108,6 +108,12 @@
 - Push CI run #179 and PR CI run #180 passed on exact PR head `dfd27386d7346c4802eab580fcc1c5cc7a76d16d`; PostgreSQL 17-backed Maven verification reported BUILD SUCCESS with 33 tests and zero failures, errors or skips.
 - PR #16 was squash-merged as `104e89e1edce581083f72c483d72309abef39e28`; main CI run #181 passed on that exact merge commit with the same 33-test result.
 
+### Engineering E-1 — Modular-monolith dependency guard
+- Added `backend/verify-module-dependencies.py`, using only the Python standard library, to verify the parent Maven module list, each module artifact ID and the allowed inward-only internal dependency graph: common <- core <- business <- api <- bootstrap.
+- Backend CI runs this check before Java setup and the PostgreSQL-backed Maven verification, so accidental reverse dependencies or skipped layers fail fast.
+- PR #20 was squash-merged as `6cb5fb98ded7a8c4723c531957b06d4e094d3f06` after PR CI #199 passed on exact head `4af1e3e26cf721759a6f9f44a8929c386a046721`.
+- Main CI #200 passed on merge commit `6cb5fb98ded7a8c4723c531957b06d4e094d3f06`.
+
 ## Not yet implemented
 - Define and implement platform-level tenant provisioning authorization only after its authority, approval and audit policy is established.
 - Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
@@ -134,6 +140,6 @@
 - Tenant controllers remain local-profile only. No production endpoint exposure is added.
 
 ## Next implementation sequence
-1. Complete review and exact-head CI validation of the modular-monolith dependency guard in PR #20; record its merge and main-branch CI evidence.
-2. Select the next business-domain capability only after its lifecycle, invariants and API contract are supported by documented requirements; the current README lists industries but does not define those rules.
-3. Define platform-level tenant-provisioning authorization and review production OIDC readiness before any production tenant API exposure.
+1. Select the next business-domain capability only when its lifecycle, invariants and API contract are supported by documented requirements. The current README lists target industries but does not define their business rules; do not invent a domain slice.
+2. Define platform-level tenant-provisioning authorization, including authority, approval and audit requirements, before implementing tenant creation.
+3. Review real production OIDC issuer/audience configuration and operational readiness before any production tenant API exposure.
