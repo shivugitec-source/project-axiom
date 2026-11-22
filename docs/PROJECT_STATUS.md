@@ -143,12 +143,12 @@
 - The runtime role receives database CONNECT, schema USAGE and explicit SELECT/INSERT/UPDATE/DELETE grants on operational tables. The platform permission catalogue is read-only; runtime has no access to `flyway_schema_history`.
 - New migration-created tables receive SELECT only by default. Each migration must explicitly grant write privileges to the runtime role for its new table.
 - PostgreSQL integration coverage verifies the runtime role has no database/schema CREATE, no role memberships, no schema/table ownership, and cannot execute `ALTER TABLE axiom.party DISABLE ROW LEVEL SECURITY`. It also verifies migration ownership, restricted role attributes, read-only permission catalogue access and runtime DML.
-- The migration role is non-superuser and has no CREATEDB, CREATEROLE, REPLICATION, BYPASSRLS, INHERIT or role memberships. It retains the database CREATE ACL because the immutable V1 migration executes `CREATE SCHEMA IF NOT EXISTS`; the runtime role never receives this privilege.
-- Flyway history is inspected through the Flyway migration connection, not through the runtime JDBC identity.
-- Local Compose initialization and Backend CI provision both identities. The backend README documents a one-time ownership transfer for existing local volumes without deleting data.
+- The migration role is non-superuser and has no CREATEDB, CREATEROLE, REPLICATION, BYPASSRLS, INHERIT or role memberships. PR #35 removes its database-wide CREATE privilege; it owns the `axiom` schema and retains schema CREATE only. The runtime role never receives database or schema CREATE.
+- Flyway history is inspected only by the standalone migrator, not through the runtime JDBC identity.
+- Local Compose initialization pre-creates the schema as `axiom_migrator`; Backend CI provisions the same roles and runs the migrator in a step-scoped process. The backend README documents a one-time ownership transfer and database-CREATE revocation for existing local volumes without deleting data.
 - PR #31 was squash-merged as `47ff60d092ad105edf3810a505b2aea07f1229b5` after exact-head PR CI #229 passed on `1b1f8da3d9fa943deb85e85450c9358ad3a56064`.
 - Main CI #230 passed on merge commit `47ff60d092ad105edf3810a505b2aea07f1229b5`; PostgreSQL 17.12-backed Maven verification reported 37 tests with zero failures, errors or skips and `BUILD SUCCESS`.
-- Remaining security limitation: Flyway still runs inside the Spring Boot application process, so that process receives both credential sets at startup. This is database-role separation, not process isolation. Before production, execute migrations in a separate deployment job and withhold migration credentials from API instances.
+- PR #35 resolves the process-level limitation by moving Flyway dependencies and resources into `axiom-migrator` and removing Flyway from the API artifact. The remaining deployment task is to run this artifact as a pre-start Job in the selected production platform; do not inject migration credentials into API workloads.
 
 ### Engineering E-6 — Read-only default privileges for future tables
 - Added a PostgreSQL integration invariant over `pg_default_acl` for the `axiom_migrator` role.
@@ -156,9 +156,20 @@
 - This protects the least-privilege pattern established by PR #31: every new runtime-managed table must receive explicit write grants in its own migration.
 - PR #33 was squash-merged as `a180c78acfc7ef6de6160423ed32dec61fb70796` after exact-head PR CI #239 passed on `ec67ad36eadc099a485b7b0853f2aa8752026232`.
 - Main CI #240 passed on merge commit `a180c78acfc7ef6de6160423ed32dec61fb70796`; PostgreSQL 17.12-backed Maven verification reported 38 tests with zero failures, errors or skips and `BUILD SUCCESS`.
+- PR #34 recorded the read-only default-privilege invariant; it was squash-merged as `163509017260dc8438bf1a3159dd9ddad124f18e` after exact-head PR CI #241 passed on `fca8040996e69b0fe144b8084a0588e3e452b00d`. Main CI #242 passed on that merge commit.
+
+### Engineering E-7 — Process-isolated Flyway migration job
+- Added the standalone `axiom-migrator` executable Maven module. It owns all Flyway dependencies and migration resources and has no internal module dependencies.
+- Removed Flyway dependencies and configuration from `axiom-bootstrap`; API startup now uses only the restricted `axiom_app` datasource and does not load migration credentials.
+- The migrator requires a dedicated `AXIOM_MIGRATION_DB_URL`, `AXIOM_MIGRATION_DB_USERNAME` and `AXIOM_MIGRATION_DB_PASSWORD` environment. Startup preflight requires the configured login to own schema `axiom`, have database CONNECT and schema CREATE, and have no database CREATE, administrative attributes or role memberships.
+- New installations pre-create the empty `axiom` schema as `axiom_migrator`. To preserve the immutable V1 statement/checksum, the migrator explicitly baselines an empty schema at version 1 and applies V2 onward. It fails closed if history is absent but schema objects already exist. Databases with existing Flyway history continue from that history.
+- The migration role no longer needs database-wide CREATE. Existing databases must have that grant revoked by a database administrator before running the new migrator; the backend README documents the non-destructive transition.
+- Backend CI scopes migration credentials only to the migration process, runs it twice to verify idempotence, then starts the API integration suite with runtime credentials only. Static regression tests protect the API/migrator artifact boundary and CI environment scoping.
+- PR #35 was squash-merged as `d37520f1ba6b6c2dfe8e89a66f6fd95086544987` after exact-head PR CI #244 passed on `54ca4895a4b16111af6401a0b004a24d322e6de6`.
+- Main CI #245 passed on that merge commit. PostgreSQL 17-backed verification reported 17 Python regression tests, 44 Maven tests, zero failures/errors/skips and `BUILD SUCCESS`; the migration job successfully baselined a clean schema and completed a second idempotent run.
 
 ## Not yet implemented
-- Move Flyway execution into a dedicated migration job before production API startup, so migration credentials are not injected into the application process. Revisit the legacy V1 schema bootstrap so the migration identity can eventually avoid database-wide CREATE while retaining ownership of the Axiom schema.
+- Integrate the standalone migrator artifact into the selected production deployment platform: define image packaging/publication, a pre-start Job, credential delivery, ordering, retry behavior and rollout coordination. No production container image or orchestrator-specific Job manifest exists yet.
 - Define and document the next business-domain capability (business purpose, actors, lifecycle, invariants, fields, workflows and API acceptance) before adding speculative domain entities. The current README lists target industries but no detailed business requirements or ADRs define the next slice.
 - Define and implement platform-level tenant provisioning authorization only after its authority, approval and audit policy is established.
 - Review real OIDC issuer/audience configuration and operational readiness before considering production tenant API exposure.
@@ -184,7 +195,7 @@
 - Tenant controllers remain local-profile only. No production endpoint exposure is added.
 
 ## Next implementation sequence
-1. Move Flyway into a separate deployment/migration job and keep its credentials out of API instances; revisit the V1 bootstrap to reduce the migration identity's database-wide CREATE grant.
+1. Select the production deployment platform and wire the standalone `axiom-migrator` artifact into a pre-start Job without passing migration credentials to API instances. Define image packaging, ordering, retries and rollout coordination.
 2. Select the next business-domain capability only when its lifecycle, invariants and API contract are supported by documented requirements. The current README lists target industries but does not define their business rules; do not invent a domain slice.
 3. Define platform-level tenant-provisioning authorization, including authority, approval and audit requirements, before implementing tenant creation.
 4. Review real production OIDC issuer/audience configuration and operational readiness before any production tenant API exposure.
