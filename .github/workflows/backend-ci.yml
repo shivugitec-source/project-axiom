@@ -62,6 +62,12 @@ jobs:
           AXIOM_MIGRATION_DB_USERNAME: axiom_migrator
           AXIOM_MIGRATION_DB_PASSWORD: axiom_ci_migration_password
         run: java -jar backend/axiom-parent/axiom-migrator/target/axiom-migrator-0.1.0-SNAPSHOT.jar
+      - name: Verify migration job is idempotent
+        env:
+          AXIOM_MIGRATION_DB_URL: jdbc:postgresql://localhost:5432/axiom
+          AXIOM_MIGRATION_DB_USERNAME: axiom_migrator
+          AXIOM_MIGRATION_DB_PASSWORD: axiom_ci_migration_password
+        run: java -jar backend/axiom-parent/axiom-migrator/target/axiom-migrator-0.1.0-SNAPSHOT.jar
       - name: Verify backend with runtime credentials only
         env:
           AXIOM_DB_URL: jdbc:postgresql://localhost:5432/axiom
