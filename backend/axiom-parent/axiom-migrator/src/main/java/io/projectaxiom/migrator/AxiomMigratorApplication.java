@@ -42,9 +42,8 @@ public final class AxiomMigratorApplication {
             }
         }
 
-        var result = flyway(settings).migrate();
-        System.out.printf("Axiom database migrations completed successfully; migrations executed: %d%n",
-                result.migrationsExecuted);
+        flyway(settings).migrate();
+        System.out.println("Axiom database migrations completed successfully.");
     }
 
     private static Flyway flyway(MigrationSettings settings) {
