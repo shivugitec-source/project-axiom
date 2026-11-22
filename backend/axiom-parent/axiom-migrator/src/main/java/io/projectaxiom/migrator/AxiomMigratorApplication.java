@@ -15,7 +15,6 @@ import org.flywaydb.core.Flyway;
  */
 public final class AxiomMigratorApplication {
     private static final String SCHEMA = "axiom";
-    private static final String HISTORY_TABLE = "flyway_schema_history";
 
     private AxiomMigratorApplication() {
     }
