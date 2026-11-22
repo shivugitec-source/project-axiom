@@ -4,13 +4,18 @@
 - JDK 21
 - Maven 3.9+
 - Docker Engine or Podman with Compose support
+- Python 3.10+ (standard library only) for architecture verification
 
 ## Build and test
 Run from the repository root:
 
 ```bash
+python3 backend/verify-module-dependencies.py
+python3 -m unittest discover -s backend/tests -p 'test_*.py' -v
 mvn -B clean verify -f backend/axiom-parent/pom.xml
 ```
+
+The architecture check validates the approved inward-only Maven module graph. Its regression tests use temporary POM fixtures to verify that reverse dependencies, inherited/profile dependencies, duplicate edges, missing modules and malformed POMs are rejected.
 
 The integration tests require a reachable PostgreSQL 17 database. GitHub Actions provisions PostgreSQL 17 and creates a restricted, non-superuser application role before running Maven. The tests verify Flyway migrations, application startup, HTTP health endpoints, and tenant isolation with PostgreSQL row-level security enabled and forced.
 
