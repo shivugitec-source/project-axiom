@@ -3,8 +3,10 @@ package io.projectaxiom.common;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
@@ -34,4 +36,28 @@ class TenantContextTest {
             assertThrows(IllegalStateException.class, () -> TenantContext.open(UUID.randomUUID()));
         }
     }
+
+    @Test
+    void rejectsClosingScopeFromDifferentThreadAndLeavesOwnerAbleToClose() throws InterruptedException {
+        UUID tenantId = UUID.randomUUID();
+        TenantContext.Scope scope = TenantContext.open(tenantId);
+        AtomicReference<RuntimeException> closeFailure = new AtomicReference<>();
+
+        Thread wrongThread = new Thread(() -> {
+            try {
+                scope.close();
+            } catch (RuntimeException failure) {
+                closeFailure.set(failure);
+            }
+        });
+        wrongThread.start();
+        wrongThread.join();
+
+        assertTrue(closeFailure.get() instanceof IllegalStateException);
+        assertEquals(tenantId, TenantContext.currentTenantId());
+
+        scope.close();
+        assertNull(TenantContext.currentTenantId());
+    }
+
 }

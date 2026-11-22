@@ -129,3 +129,8 @@ Check:
 - http://localhost:8080/api/v1/system
 
 `axiom-bootstrap` is the API executable and `axiom-migrator` is a separate one-shot migration executable. The migrator has no internal module dependencies and contains the Flyway migration resources; the API artifact does not include Flyway or migration credentials. Other modules are libraries within the modular monolith. The repository does not yet define a production container image or orchestrator-specific Job manifest; deployment owners must run the migrator artifact as a pre-start job and provide migration credentials only to that job.
+
+
+## Request-scoped tenant context lifecycle
+
+`TenantContext.open(...)` returns an AutoCloseable scope backed by a thread-local value. The scope must be closed by the same thread that opened it. Closing it from another thread now fails fast and leaves the scope open so its owner can still remove the thread-local value. This prevents a cross-thread close from marking the scope closed after removing only the other thread's ThreadLocal, which would leave the original request thread's tenant context bound. Tenant context is not implicitly propagated to asynchronous work; asynchronous execution must establish and close its own verified context on the executing thread.
