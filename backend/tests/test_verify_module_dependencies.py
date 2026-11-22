@@ -129,7 +129,12 @@ class VerifyModuleDependenciesTests(unittest.TestCase):
         self.assertEqual([], verifier.verify_repository(self.root))
 
     def test_declared_maven_module_sources_are_allowed(self) -> None:
-        self.write_fixture()
+        self.write_fixture(
+            module_dependencies={
+                module: sorted(dependencies)
+                for module, dependencies in verifier.ALLOWED_INTERNAL_DEPENDENCIES.items()
+            }
+        )
         source = (
             self.root / verifier.POM_ROOT / "axiom-migrator"
             / "src" / "test" / "java" / "ExampleTest.java"
@@ -139,7 +144,12 @@ class VerifyModuleDependenciesTests(unittest.TestCase):
         self.assertEqual([], verifier.verify_repository(self.root))
 
     def test_unmanaged_source_and_resource_trees_fail(self) -> None:
-        self.write_fixture()
+        self.write_fixture(
+            module_dependencies={
+                module: sorted(dependencies)
+                for module, dependencies in verifier.ALLOWED_INTERNAL_DEPENDENCIES.items()
+            }
+        )
         orphan_root = self.root / "backend" / "axiom-migrator" / "src"
         java_source = orphan_root / "test" / "java" / "ExampleTest.java"
         migration = orphan_root / "main" / "resources" / "db" / "migration" / "V1__old.sql"
