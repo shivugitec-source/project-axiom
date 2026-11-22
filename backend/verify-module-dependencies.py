@@ -16,9 +16,10 @@ EXPECTED_MODULES = (
     "axiom-business",
     "axiom-api",
     "axiom-bootstrap",
+    "axiom-migrator",
 )
 
-# Dependencies point inward only: common <- core <- business <- api <- bootstrap.
+# API dependencies point inward: common <- core <- business <- api <- bootstrap.\n# axiom-migrator is a separate one-shot process with no internal module dependencies.
 # A change to this graph must be deliberate and reviewed as an architecture change.
 ALLOWED_INTERNAL_DEPENDENCIES = {
     "axiom-common": set(),
@@ -26,6 +27,7 @@ ALLOWED_INTERNAL_DEPENDENCIES = {
     "axiom-business": {"axiom-core"},
     "axiom-api": {"axiom-business"},
     "axiom-bootstrap": {"axiom-api"},
+    "axiom-migrator": set(),
 }
 
 
