@@ -245,7 +245,7 @@ class AxiomApplicationIntegrationTest {
                     FROM pg_default_acl d
                     CROSS JOIN LATERAL aclexplode(d.defaclacl) acl_entry
                     WHERE d.defaclrole = (SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator')
-                      AND d.defaclnamespace = 'axiom'::regnamespace
+                      AND d.defaclnamespace IN (0, 'axiom'::regnamespace)
                       AND d.defaclobjtype = 'r'
                       AND acl_entry.grantee IN (
                           0, (SELECT oid FROM pg_roles WHERE rolname = 'axiom_app')
