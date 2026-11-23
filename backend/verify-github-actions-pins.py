@@ -111,20 +111,17 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
 
         for line_number, line in enumerate(lines, start=1):
             uncommented = strip_yaml_comment(line)
-            match = USES_KEY.search(uncommented)
-            if match is None:
-                continue
+            for match in USES_KEY.finditer(uncommented):
+                reference = extract_reference(uncommented[match.end() :])
+                if is_safe_local_reference(reference):
+                    continue
+                if EXTERNAL_ACTION.fullmatch(reference) or DOCKER_ACTION.fullmatch(reference):
+                    continue
 
-            reference = extract_reference(uncommented[match.end() :])
-            if is_safe_local_reference(reference):
-                continue
-            if EXTERNAL_ACTION.fullmatch(reference) or DOCKER_ACTION.fullmatch(reference):
-                continue
-
-            violations.append(
-                f"{workflow_file}:{line_number}: external action must use a full "
-                f"40-character commit SHA (or a container digest): {reference!r}"
-            )
+                violations.append(
+                    f"{workflow_file}:{line_number}: external action must use a full "
+                    f"40-character commit SHA (or a container digest): {reference!r}"
+                )
 
     return violations
 

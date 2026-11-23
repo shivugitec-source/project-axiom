@@ -83,6 +83,16 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         )
         self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
 
+    def test_checks_every_flow_mapping_on_same_line(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ uses: vendor/first@"
+            + "a" * 40
+            + " }, { uses: vendor/second@main }, { uses: vendor/third@develop }]\\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(2, len(errors))
+
     def test_requires_container_action_digest(self) -> None:
         self.write_workflow(
             "ci.yml",
