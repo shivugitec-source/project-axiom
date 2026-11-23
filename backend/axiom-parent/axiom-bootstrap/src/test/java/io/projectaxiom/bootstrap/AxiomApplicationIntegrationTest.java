@@ -96,6 +96,27 @@ class AxiomApplicationIntegrationTest {
     @Autowired
     private AxiomJwtAuthenticationConverter authenticationConverter;
 
+    private List<String> findDirectAndTransitiveMembers(String grantedRole) {
+        return jdbcTemplate.queryForList("""
+                WITH RECURSIVE role_members(member_oid) AS (
+                    SELECT member
+                    FROM pg_auth_members
+                    WHERE roleid = (
+                        SELECT oid FROM pg_roles WHERE rolname = ?
+                    )
+                    UNION
+                    SELECT membership.member
+                    FROM pg_auth_members membership
+                    JOIN role_members nested_member
+                      ON membership.roleid = nested_member.member_oid
+                )
+                SELECT member_role.rolname
+                FROM role_members
+                JOIN pg_roles member_role ON member_role.oid = role_members.member_oid
+                ORDER BY member_role.rolname
+                """, String.class, grantedRole);
+    }
+
     @Test
     void startsAgainstSchemaPreparedByTheSeparateMigrationProcess() {
         Integer schemaCount = jdbcTemplate.queryForObject(
@@ -167,26 +188,9 @@ class AxiomApplicationIntegrationTest {
 
     @Test
     void runtimeRoleHasNoDirectOrIndirectMembers() {
-        List<String> memberRoles = jdbcTemplate.queryForList("""
-                WITH RECURSIVE runtime_role_members(member_oid) AS (
-                    SELECT member
-                    FROM pg_auth_members
-                    WHERE roleid = (
-                        SELECT oid FROM pg_roles WHERE rolname = current_user
-                    )
-                    UNION
-                    SELECT membership.member
-                    FROM pg_auth_members membership
-                    JOIN runtime_role_members nested_member
-                      ON membership.roleid = nested_member.member_oid
-                )
-                SELECT member_role.rolname
-                FROM runtime_role_members
-                JOIN pg_roles member_role ON member_role.oid = runtime_role_members.member_oid
-                ORDER BY member_role.rolname
-                """, String.class);
+        String runtimeRole = jdbcTemplate.queryForObject("SELECT current_user", String.class);
 
-        assertThat(memberRoles)
+        assertThat(findDirectAndTransitiveMembers(runtimeRole))
                 .as("no other database role may be a direct or transitive member of the runtime application role")
                 .isEmpty();
     }
@@ -292,28 +296,16 @@ class AxiomApplicationIntegrationTest {
 
     @Test
     void migrationRoleHasNoDirectOrIndirectMembers() {
-        List<String> memberRoles = jdbcTemplate.queryForList("""
-                WITH RECURSIVE migration_role_members(member_oid) AS (
-                    SELECT member
-                    FROM pg_auth_members
-                    WHERE roleid = (
-                        SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator'
-                    )
-                    UNION
-                    SELECT membership.member
-                    FROM pg_auth_members membership
-                    JOIN migration_role_members nested_member
-                      ON membership.roleid = nested_member.member_oid
-                )
-                SELECT member_role.rolname
-                FROM migration_role_members
-                JOIN pg_roles member_role ON member_role.oid = migration_role_members.member_oid
-                ORDER BY member_role.rolname
-                """, String.class);
-
-        assertThat(memberRoles)
+        assertThat(findDirectAndTransitiveMembers("axiom_migrator"))
                 .as("no other database role may be a direct or transitive member of the migration role")
                 .isEmpty();
+    }
+
+    @Test
+    void recursiveRoleMembershipQueryFindsDirectAndTransitiveMembers() {
+        assertThat(findDirectAndTransitiveMembers("axiom_membership_probe"))
+                .as("recursive membership traversal must discover direct and nested member roles")
+                .containsExactly("axiom_membership_probe_direct", "axiom_membership_probe_nested");
     }
 
     @Test

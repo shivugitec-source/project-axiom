@@ -341,3 +341,10 @@
 - The migration identity owns the application schema and can create or alter schema objects. The existing catalog invariant rejects `axiom_migrator` being a member of another role, but did not reject another role being granted membership in `axiom_migrator`.
 - Added a recursive `pg_auth_members` catalog assertion that rejects direct or transitive roles granted membership in the migration identity. This complements the existing outgoing-membership check and closes the `SET ROLE axiom_migrator` path; `NOINHERIT` alone is not sufficient.
 - Test-only security invariant. No production role membership, database grant, schema, migration, RLS predicate, credential or API permission is changed. The migration identity remains isolated to its dedicated one-shot process.
+
+
+### Engineering E-25 — Prove direct and transitive PostgreSQL role-membership detection
+- Refactored the recursive `pg_auth_members` traversal into one parameterized integration-test helper shared by the runtime and migration role isolation assertions.
+- Added a positive catalog regression case against a test-only three-role graph: the query must discover both a direct member and a nested transitive member. This prevents the security assertions from passing solely because the CI database happens to contain no memberships.
+- Provisioned the `NOLOGIN` fixture roles in local PostgreSQL initialization and Backend CI. They receive no Axiom database/schema grants and are unrelated to `axiom_app` and `axiom_migrator`.
+- No production role memberships, database privileges, schema, migrations, RLS policies, credentials or API behavior changed.

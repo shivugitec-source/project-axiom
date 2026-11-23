@@ -39,6 +39,12 @@ The migration database role is isolated from role membership as well. `axiom_mig
 docker compose -f deployment/compose/docker-compose.yml up -d postgres
 ```
 
+The PostgreSQL initialization directory also creates a test-only role-membership graph using `02-role-membership-fixture.sql`. Its three `NOLOGIN` roles have no Axiom database or schema privileges; the graph exists only to prove that the integration query finds both direct and transitive members. Compose applies it automatically when creating a fresh database volume. Existing volumes do not rerun initialization scripts, so apply the fixture once when preparing an existing local test database:
+
+```bash
+docker exec -i axiom-postgres psql -U axiom_admin -d axiom -v ON_ERROR_STOP=1 < deployment/compose/init/02-role-membership-fixture.sql
+```
+
 The local database listens on localhost:5432. The API connects as the restricted `axiom_app` runtime role (default password: `axiom_dev_only`). The separate `axiom-migrator` executable connects as `axiom_migrator` (default password: `axiom_migrator_dev_only`). The PostgreSQL `axiom_admin` role is used only to initialize the local database. These credentials are for local development only.
 
 The initialization SQL runs only when PostgreSQL creates a new data directory. If you already have a database volume from an earlier single-role setup, do not delete it. Connect as a PostgreSQL administrator and perform a one-time ownership transition before starting the updated application:
