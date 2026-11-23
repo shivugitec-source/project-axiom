@@ -83,6 +83,42 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         self.assertEqual(1, len(errors))
         self.assertIn("escaped double-quoted", errors[0])
 
+    def test_rejects_explicit_yaml_uses_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - ? uses\n    : vendor/action@main\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("explicit, anchored, aliased, or tagged", errors[0])
+
+    def test_rejects_aliased_yaml_uses_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "key: &uses_key uses\nsteps:\n  - {*uses_key: vendor/action@main}\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("explicit, anchored, aliased, or tagged", errors[0])
+
+    def test_rejects_tagged_yaml_uses_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - {!!str uses: vendor/action@main}\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("explicit, anchored, aliased, or tagged", errors[0])
+
+    def test_rejects_anchored_yaml_uses_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - {&uses_key uses: vendor/action@main}\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("explicit, anchored, aliased, or tagged", errors[0])
+
     def test_accepts_quoted_flow_style_pinned_action_references(self) -> None:
         self.write_workflow(
             "ci.yml",
