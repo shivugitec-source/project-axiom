@@ -284,5 +284,5 @@
 ### Engineering E-19 — Pin GitHub Actions to immutable revisions
 - Replaced mutable `v5` references for `actions/checkout` and `actions/setup-java` with the exact upstream commit SHAs for their v5 releases; release labels remain as comments for maintainability.
 - Added a standard-library workflow verifier that scans every `.yml` and `.yaml` file under `.github/workflows`. External actions require full 40-character commit SHAs, container actions require SHA-256 digests, and local actions/reusable workflows are limited to repository-relative paths without parent-directory traversal. The verifier recognizes block-style and flow-style YAML mappings.
-- Added fixture regression coverage for pinned references, mutable tags/branches, abbreviated SHAs, block- and flow-style mappings, safe local workflows, rejected local path traversal, container digests, nested workflow files and missing workflow directories.
+- Added fixture regression coverage for pinned references, mutable tags/branches, abbreviated SHAs, block- and flow-style mappings, escaped double-quoted key rejection, safe local workflows, rejected local path traversal, container digests, nested workflow files and missing workflow directories.
 - This is a CI supply-chain boundary; it does not change application runtime behavior, database roles, migrations, RLS or deployment infrastructure.
