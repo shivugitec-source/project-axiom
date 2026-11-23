@@ -138,3 +138,5 @@ Check:
 ## GitHub Actions supply-chain policy
 
 Every external action referenced from `.github/workflows` must be pinned to its full 40-character upstream commit SHA, not a mutable release tag or branch. Container actions must use an immutable `sha256` image digest. Local actions and reusable workflows are allowed because they are resolved from the checked-out repository revision. Backend CI runs `backend/verify-github-actions-pins.py` and its standard-library regression tests to enforce this rule. When upgrading an action, inspect the intended upstream release and its commit, then update the pinned SHA while retaining the release tag as a comment for readability. This protects the workflow from tag retargeting; it does not replace review of an action's own dependencies or source.
+
+The verifier recognizes both block-style and flow-style YAML `uses` keys. Local action and reusable-workflow references must remain inside the checked-out repository; parent-directory traversal is rejected. Unsupported or ambiguous references fail closed.

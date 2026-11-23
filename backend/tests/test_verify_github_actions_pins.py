@@ -59,6 +59,30 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         )
         self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
 
+    def test_rejects_local_path_traversal(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "jobs:\n  outside:\n    uses: ./../outside/action\n"
+            "  nested:\n    uses: ./actions/../../outside/action\n",
+        )
+        self.assertEqual(2, len(VERIFIER.verify_workflows(self.workflow_directory)))
+
+    def test_rejects_flow_style_mutable_action_references(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - { name: Checkout, uses: vendor/action@main }\n",
+        )
+        self.assertEqual(1, len(VERIFIER.verify_workflows(self.workflow_directory)))
+
+    def test_accepts_quoted_flow_style_pinned_action_references(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - { name: Checkout, 'uses': 'vendor/action@"
+            + "a" * 40
+            + "' }\n",
+        )
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
     def test_requires_container_action_digest(self) -> None:
         self.write_workflow(
             "ci.yml",

@@ -9,19 +9,82 @@ import sys
 from pathlib import Path
 
 
-USES_LINE = re.compile(r"^\s*(?:-\s*)?uses\s*:\s*(.*?)\s*$")
+# Match block mappings and flow mappings, including quoted YAML keys.
+USES_KEY = re.compile(
+    r"""^\s*(?:-\s*)?(?:uses|'uses'|"uses")\s*:\s*|[{,]\s*(?:uses|'uses'|"uses")\s*:\s*"""
+)
 EXTERNAL_ACTION = re.compile(
     r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-fA-F]{40}$"
 )
 DOCKER_ACTION = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-fA-F]{64}$")
 
 
-def normalize_reference(raw_value: str) -> str:
-    """Remove a YAML inline comment and optional scalar quotes."""
-    value = raw_value.split(" #", 1)[0].strip()
-    if len(value) >= 2 and value[0] in {"'", '"'} and value[-1] == value[0]:
-        value = value[1:-1]
-    return value
+def strip_yaml_comment(line: str) -> str:
+    """Remove a YAML comment without truncating quoted scalar content."""
+    quote: str | None = None
+    index = 0
+    while index < len(line):
+        character = line[index]
+        if quote == "'":
+            if character == "'" and index + 1 < len(line) and line[index + 1] == "'":
+                index += 2
+                continue
+            if character == "'":
+                quote = None
+        elif quote == '"':
+            if character == "\\":
+                index += 2
+                continue
+            if character == '"':
+                quote = None
+        elif character in {"'", '"'}:
+            quote = character
+        elif character == "#" and (index == 0 or line[index - 1].isspace()):
+            return line[:index]
+        index += 1
+    return line
+
+
+def extract_reference(raw_value: str) -> str:
+    """Extract a scalar action reference from block or flow-style YAML."""
+    value = raw_value.strip()
+    if not value:
+        return ""
+
+    if value[0] in {"'", '"'}:
+        quote = value[0]
+        characters: list[str] = []
+        index = 1
+        while index < len(value):
+            character = value[index]
+            if quote == "'" and character == "'" and index + 1 < len(value) and value[index + 1] == "'":
+                characters.append("'")
+                index += 2
+                continue
+            if quote == '"' and character == "\\" and index + 1 < len(value):
+                characters.append(value[index + 1])
+                index += 2
+                continue
+            if character == quote:
+                trailing = value[index + 1 :].strip()
+                if trailing and not trailing.startswith((",", "}")):
+                    return value
+                return "".join(characters)
+            characters.append(character)
+            index += 1
+        return value
+
+    # A flow-mapping value ends at its comma or closing brace. A block scalar
+    # has no such delimiter, so the same split safely leaves its full value.
+    return re.split(r"[,}]", value, maxsplit=1)[0].strip()
+
+
+def is_safe_local_reference(reference: str) -> bool:
+    """Allow only repository-relative local actions/workflows without traversal."""
+    if not reference.startswith("./") or "@" in reference:
+        return False
+    segments = reference[2:].split("/")
+    return bool(segments) and all(segment not in {"", ".", ".."} for segment in segments)
 
 
 def verify_workflows(workflow_directory: Path) -> list[str]:
@@ -47,13 +110,13 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
             continue
 
         for line_number, line in enumerate(lines, start=1):
-            match = USES_LINE.match(line)
+            uncommented = strip_yaml_comment(line)
+            match = USES_KEY.search(uncommented)
             if match is None:
                 continue
 
-            reference = normalize_reference(match.group(1))
-            if reference.startswith("./") and "@" not in reference:
-                # Local actions and reusable workflows are tied to this repository revision.
+            reference = extract_reference(uncommented[match.end() :])
+            if is_safe_local_reference(reference):
                 continue
             if EXTERNAL_ACTION.fullmatch(reference) or DOCKER_ACTION.fullmatch(reference):
                 continue
