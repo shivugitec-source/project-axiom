@@ -68,6 +68,11 @@ jobs:
           ALTER DEFAULT PRIVILEGES FOR ROLE axiom_migrator IN SCHEMA axiom
               GRANT SELECT ON TABLES TO axiom_app;
           SQL
+      - name: Provision PostgreSQL role-membership regression fixture
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -i "$POSTGRES_CONTAINER_ID" psql -U postgres -d axiom -v ON_ERROR_STOP=1 < deployment/compose/init/02-role-membership-fixture.sql
       - name: Build the isolated migration artifact
         run: mvn -B -ntp -DskipTests clean package -f backend/axiom-parent/pom.xml
       - name: Verify packaged API and migrator boundaries
