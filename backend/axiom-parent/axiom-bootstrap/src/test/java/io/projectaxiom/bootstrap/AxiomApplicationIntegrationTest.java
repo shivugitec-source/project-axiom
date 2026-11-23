@@ -291,6 +291,32 @@ class AxiomApplicationIntegrationTest {
     }
 
     @Test
+    void migrationRoleHasNoDirectOrIndirectMembers() {
+        List<String> memberRoles = jdbcTemplate.queryForList("""
+                WITH RECURSIVE migration_role_members(member_oid) AS (
+                    SELECT member
+                    FROM pg_auth_members
+                    WHERE roleid = (
+                        SELECT oid FROM pg_roles WHERE rolname = 'axiom_migrator'
+                    )
+                    UNION
+                    SELECT membership.member
+                    FROM pg_auth_members membership
+                    JOIN migration_role_members nested_member
+                      ON membership.roleid = nested_member.member_oid
+                )
+                SELECT member_role.rolname
+                FROM migration_role_members
+                JOIN pg_roles member_role ON member_role.oid = migration_role_members.member_oid
+                ORDER BY member_role.rolname
+                """, String.class);
+
+        assertThat(memberRoles)
+                .as("no other database role may be a direct or transitive member of the migration role")
+                .isEmpty();
+    }
+
+    @Test
     void futureTablesDefaultToRuntimeReadOnlyPrivileges() {
         Boolean runtimeDefaultsAreReadOnly = jdbcTemplate.queryForObject("""
                 SELECT EXISTS (
