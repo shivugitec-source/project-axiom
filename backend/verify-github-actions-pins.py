@@ -12,7 +12,7 @@ from pathlib import Path
 # Match block mappings and flow mappings. Escaped double-quoted keys are
 # rejected below because YAML decodes them before GitHub interprets mapping keys.
 USES_KEY = re.compile(
-    r"""^\s*(?:-\s*)?(?P<block_key>uses|'uses'|"(?:[^"\\\\]|\\\\.)*")\s*:\s*|[{,]\s*(?P<flow_key>uses|'uses'|"(?:[^"\\\\]|\\\\.)*")\s*:\s*"""
+    r"""^\s*(?:-\s*)?(?P<block_key>uses|'uses'|"(?:[^"\\]|\\.)*")\s*:\s*|[{,]\s*(?P<flow_key>uses|'uses'|"(?:[^"\\]|\\.)*")\s*:\s*"""
 )
 EXTERNAL_ACTION = re.compile(
     r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-fA-F]{40}$"
