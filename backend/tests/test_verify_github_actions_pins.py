@@ -88,7 +88,7 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
             "ci.yml",
             "steps: [{ uses: vendor/first@"
             + "a" * 40
-            + " }, { uses: vendor/second@main }, { uses: vendor/third@develop }]\\n",
+            + " }, { uses: vendor/second@main }, { uses: vendor/third@develop }]",
         )
         errors = VERIFIER.verify_workflows(self.workflow_directory)
         self.assertEqual(2, len(errors))
