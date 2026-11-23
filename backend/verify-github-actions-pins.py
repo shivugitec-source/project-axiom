@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from pathlib import Path
@@ -107,6 +108,17 @@ def is_safe_local_reference(reference: str) -> bool:
     return bool(segments) and all(segment not in {"", ".", ".."} for segment in segments)
 
 
+def is_escaped_double_quoted_key(key: str, expected: str) -> bool:
+    """Return whether an escaped YAML double-quoted key decodes to expected."""
+    if not key.startswith('"') or "\\" not in key:
+        return False
+    try:
+        decoded = ast.literal_eval(key)
+    except (SyntaxError, ValueError):
+        return False
+    return isinstance(decoded, str) and decoded == expected
+
+
 def verify_workflows(workflow_directory: Path) -> list[str]:
     """Return violations for mutable or unsupported workflow action references."""
     if not workflow_directory.is_dir():
@@ -144,16 +156,14 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
 
             for match in USES_KEY.finditer(uncommented):
                 key = match.group("block_key") or match.group("flow_key")
-                if key.startswith('"'):
-                    if "\\" in key:
+                if key.startswith('"') and "\\" in key:
+                    if is_escaped_double_quoted_key(key, "uses"):
                         violations.append(
                             f"{workflow_file}:{line_number}: escaped double-quoted YAML mapping "
                             "keys are unsupported because they can disguise the 'uses' key"
                         )
-                        continue
-                    if key != '"uses"':
-                        continue
-                elif key not in {"uses", "'uses'"}:
+                    continue
+                if key not in {"uses", "'uses'", '"uses"'}:
                     continue
 
                 reference = extract_reference(uncommented[match.end() :])
@@ -169,16 +179,14 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
 
             for match in IMAGE_KEY.finditer(uncommented):
                 key = match.group("block_key") or match.group("flow_key")
-                if key.startswith('"'):
-                    if "\\" in key:
+                if key.startswith('"') and "\\" in key:
+                    if is_escaped_double_quoted_key(key, "image"):
                         violations.append(
                             f"{workflow_file}:{line_number}: escaped double-quoted YAML mapping "
                             "keys are unsupported because they can disguise an 'image' key"
                         )
-                        continue
-                    if key != '"image"':
-                        continue
-                elif key not in {"image", "'image'"}:
+                    continue
+                if key not in {"image", "'image'", '"image"'}:
                     continue
 
                 reference = extract_reference(uncommented[match.end() :])

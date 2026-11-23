@@ -233,6 +233,22 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         self.assertEqual(1, len(errors))
         self.assertIn("escaped double-quoted", errors[0])
 
+    def test_rejects_hex_escaped_double_quoted_uses_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            'steps:\n  - {"\\x75ses": vendor/action@main}\n',
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("escaped double-quoted", errors[0])
+
+    def test_ignores_escaped_unrelated_double_quoted_mapping_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            'steps:\n  - {"\\u006eame": Checkout}\n',
+        )
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
     def test_scans_nested_workflow_files(self) -> None:
         self.write_workflow("nested/ci.yaml", "steps:\n  - uses: vendor/action@v5\n")
         self.assertEqual(1, len(VERIFIER.verify_workflows(self.workflow_directory)))
