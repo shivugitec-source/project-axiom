@@ -74,6 +74,15 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         )
         self.assertEqual(1, len(VERIFIER.verify_workflows(self.workflow_directory)))
 
+    def test_rejects_escaped_double_quoted_uses_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            'steps:\n  - {"\\u0075ses": vendor/action@main}\n',
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("escaped double-quoted", errors[0])
+
     def test_accepts_quoted_flow_style_pinned_action_references(self) -> None:
         self.write_workflow(
             "ci.yml",
