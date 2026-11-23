@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Require immutable references for external actions used by GitHub workflows."""
+"""Require immutable references for GitHub Actions and workflow service images."""
 
 from __future__ import annotations
 
@@ -33,6 +33,10 @@ EXTERNAL_ACTION = re.compile(
     r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-fA-F]{40}$"
 )
 DOCKER_ACTION = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-fA-F]{64}$")
+IMAGE_KEY = re.compile(
+    r"""^\s*(?:-\s*)?(?P<block_key>image|'image'|"(?:[^"\\]|\\.)*")\s*:\s*|[{,]\s*(?P<flow_key>image|'image'|"(?:[^"\\]|\\.)*")\s*:\s*"""
+)
+IMAGE_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*@sha256:[0-9a-fA-F]{64}$")
 
 
 def strip_yaml_comment(line: str) -> str:
@@ -163,6 +167,29 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
                     f"40-character commit SHA (or a container digest): {reference!r}"
                 )
 
+            for match in IMAGE_KEY.finditer(uncommented):
+                key = match.group("block_key") or match.group("flow_key")
+                if key.startswith('"'):
+                    if "\\" in key:
+                        violations.append(
+                            f"{workflow_file}:{line_number}: escaped double-quoted YAML mapping "
+                            "keys are unsupported because they can disguise an 'image' key"
+                        )
+                        continue
+                    if key != '"image"':
+                        continue
+                elif key not in {"image", "'image'"}:
+                    continue
+
+                reference = extract_reference(uncommented[match.end() :])
+                if IMAGE_REFERENCE.fullmatch(reference):
+                    continue
+
+                violations.append(
+                    f"{workflow_file}:{line_number}: workflow service/container image "
+                    f"must use a full sha256 digest: {reference!r}"
+                )
+
     return violations
 
 
@@ -184,7 +211,7 @@ def main() -> int:
             print(f"ERROR: {violation}", file=sys.stderr)
         return 1
 
-    print("GitHub workflow action references use immutable revisions.")
+    print("GitHub workflow actions and service images use immutable revisions/digests.")
     return 0
 
 
