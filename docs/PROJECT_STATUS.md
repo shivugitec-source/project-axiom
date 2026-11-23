@@ -287,3 +287,9 @@
 - Added fixture regression coverage for pinned references, mutable tags/branches, abbreviated SHAs, block- and flow-style mappings, escaped double-quoted key rejection, explicit/anchored/aliased/tagged mapping-key rejection, safe local workflows, rejected local path traversal, container digests, nested workflow files and missing workflow directories.
 - The verifier fails closed on YAML key indirection rather than trying to resolve explicit keys, anchors, aliases or tags with a line-oriented standard-library scanner.
 - This is a CI supply-chain boundary; it does not change application runtime behavior, database roles, migrations, RLS or deployment infrastructure.
+
+### Engineering E-20 — Reject combined YAML anchor and tag mapping-key properties
+- A follow-up review found that YAML permits an anchor and a tag to decorate the same mapping key in either order. The previous workflow verifier rejected anchored and tagged keys individually but did not recognize their combined forms, allowing the actual decoded \`uses\` key to evade the line-oriented scan.
+- Extended the fail-closed mapping-key guard to recognize one or more anchor/tag node properties before a key, regardless of property order.
+- Added regression fixtures for all four valid flow/block-style and anchor/tag ordering combinations; each contains a mutable external action reference and must be rejected.
+- This is CI supply-chain verification only. It does not change application runtime behavior, database roles, migrations, RLS, credentials or deployment infrastructure.
