@@ -300,3 +300,31 @@
 - Added six regression fixtures covering block and flow mappings, bare tags, and both anchor/tag property orders. Each fixture was independently parsed as valid YAML and confirmed to decode to a mutable external action reference under the actual `uses` key.
 - The test suite remains Python-standard-library-only; parser validation was performed during review and adds no runtime or CI dependency.
 - CI supply-chain verifier only; no application runtime, schema, migration, RLS, database privilege, credential or deployment change.
+
+
+### Validation recovery ledger — Engineering E-19 through E-21
+- PR #55's escaped-key regression initially failed on heads `25de582d489edacd8db23468df1ac3550a6b1bc9`, `b34886afaf1ad5d02398fe65475ce693a6f8e48a` and `0d2c277497c33dfb86dbe94ef6fed48b8683a4bf` (push/PR runs #357–#361). The raw-string `USES_KEY` expression over-escaped backslashes and did not match YAML's escaped double-quoted key. Corrective SHA `8403e9164aa368e3f419190d4a464cb2e4b55e79` passed push #362 and PR #363; final PR head `e2a898abd950b72a05dd7eea0a3cc5e6727dfe37` passed push #364 and PR #365. PR #55 merged as `5826bf476fadfaecd319c7e1a68e6afb69bc8a74`; main CI #366 passed.
+- PR #56's intermediate heads `3c0b0f32235b4820580459ab0e38465e3b8c87a2`, `5925a982c08a2153f14786f499541e5e5f7e237e`, `281b2c5ede1eb6547effc314725a7a3cf4dc28d9`, `3e5f6bfcb36b36b572cd4696152d983a86d5d9ee`, `4915672998111e47f2f30b53843e75ec0cb337ad` and `cbe58e8037f580c47259a862898ea2ec290ada5d` failed because an intermediate f-string regular-expression edit produced invalid Python syntax at line 26. Corrective SHA `821a63aafd72422dcbf610e8293256195f2018a9` passed push #376 and PR #377.
+- PR #56 then failed on `8ca860fe9b44aa57730d094f09709cf85f621ed9` in push #378 and PR #379: the six-case fixture contained literal escaped newline sequences, so only one violation was detected. Corrective SHA `a04d925776f4d5a69fcdd5625c063415ba8228c1` used actual multiline YAML and passed exact-head push #380 and PR #381. PR #56 merged as `605fd063ecdcb5cb48143401ab8d3d47ad874212`; main CI #382 passed.
+
+
+### Engineering E-22 — Scope tenant RLS policies to the runtime role
+- Review found that V2–V5 created each tenant policy without a `TO` clause, which PostgreSQL interprets as `PUBLIC`. The existing test accepted either `PUBLIC` or `axiom_app`, so it proved that the runtime role was covered but did not prove least-privilege policy scope.
+- Added immutable-history-preserving V7 to replace all eight tenant policies with the same permissive ALL command and exact USING/WITH CHECK predicates, explicitly targeted only to `axiom_app`.
+- Tightened the PostgreSQL catalog integration assertion to require the policy role array to equal exactly `{axiom_app}`; a PUBLIC or additional-role policy now fails validation.
+- This narrows policy applicability without changing table grants, tenant membership/authorization, forced RLS, schema ownership, API exposure or runtime query behavior. The migrator remains the trusted schema owner; future data migrations must handle forced RLS explicitly without widening the runtime policy.
+
+- Initial push CI #385 on SHA `7a93a5e9fa557ca5569a35c8770cb850a0278863` failed before application validation because the force-push event supplied previous head `00427cafd9a85ab993aaf195e3060aff5fee3603` as its migration-comparison base, but that superseded commit was no longer reachable/fetchable (`fatal: bad object`). No migration content was changed; the immutable-history verifier correctly failed closed. The corrective follow-up preserves the current head as a fast-forward parent so the push event's `before` revision remains available.
+
+
+### Validation recovery — Engineering E-22
+- PR #57 head `00427cafd9a85ab993aaf195e3060aff5fee3603` failed push CI #384 because `test_migration_artifact_owns_flyway_and_all_migration_resources` expected only V1–V6 while the artifact correctly contained the additive V7 migration. The same stale inventory assertion failed on SHA `7a93a5e9fa557ca5569a35c8770cb850a0278863` in PR CI #386. This was a regression-test inventory defect, not a migration packaging defect. The corrective change adds V7 to the expected inventory and retains the complete artifact ownership assertions.
+- Push CI #385 on SHA `7a93a5e9fa557ca5569a35c8770cb850a0278863` separately failed the migration-immutability check because the force-push event supplied previous head `00427cafd9a85ab993aaf195e3060aff5fee3603` as its comparison base after that commit had become unreachable (`fatal: bad object`). The verifier correctly failed closed. The subsequent fast-forward head `134ff7892cda635785b44a0cccec6d2f74f74ffb` passed the immutability step in push CI #387 and PR CI #388; no historical migration was edited, deleted or renamed.
+- The stale V1–V6 inventory assertion also failed on `134ff7892cda635785b44a0cccec6d2f74f74ffb` in push CI #387 and PR CI #388. Corrective commit `342f2418df0eb79dcfe174e972236927c9e91c00` adds the V7 expectation without weakening artifact ownership checks.
+
+
+### Engineering E-22 — Exact-head validation completion
+- Corrective PR head `342f2418df0eb79dcfe174e972236927c9e91c00` passed push CI run #389 (`45172891729`) and PR CI run #390 (`45172905503`) on the same exact SHA. Both workflow jobs completed successfully, including migration immutability, module-boundary checks, migration artifact isolation, PostgreSQL 17.12 integration, and cleanup.
+- The Python standard-library regression suite passed all 58 tests. Maven reported 5 common tests, 46 bootstrap tests (including PostgreSQL-backed RLS catalog coverage), and 2 migrator tests; all had zero failures, errors or skips and both builds reported `BUILD SUCCESS`.
+- Flyway validated the migration set, applied V2–V7 after the V1 baseline, reached schema version V7, and a second migrator invocation reported the schema up to date. The RLS catalog invariant confirmed exactly one permissive ALL policy per tenant-owned table, with the exact tenant predicates and role array `{axiom_app}`.
+- PR #57 remains open pending final metadata/diff review and merge; main CI for the eventual merge commit has not yet run.

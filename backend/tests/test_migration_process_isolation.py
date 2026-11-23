@@ -41,6 +41,7 @@ class MigrationProcessIsolationTests(unittest.TestCase):
                 "V4__create_identity_and_access_foundation.sql",
                 "V5__create_party_contact_points.sql",
                 "V6__separate_migration_and_runtime_roles.sql",
+                "V7__scope_tenant_rls_policies_to_runtime_role.sql",
             ],
             migration_files,
         )
