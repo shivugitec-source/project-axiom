@@ -40,7 +40,7 @@ public final class TenantContextFilter extends OncePerRequestFilter {
         String requestedTenant = tenantHeaders.nextElement();
         if (tenantHeaders.hasMoreElements() || requestedTenant == null || requestedTenant.isBlank()) {
             response.sendError(HttpStatus.BAD_REQUEST.value(),
-                    "X-Tenant-ID must be supplied exactly once as a nonblank UUID");
+                    "X-Tenant-ID must be supplied exactly once as a nonblank canonical UUID");
             return;
         }
 
@@ -48,7 +48,11 @@ public final class TenantContextFilter extends OncePerRequestFilter {
         try {
             tenantId = UUID.fromString(requestedTenant);
         } catch (IllegalArgumentException exception) {
-            response.sendError(HttpStatus.BAD_REQUEST.value(), "X-Tenant-ID must be a UUID");
+            response.sendError(HttpStatus.BAD_REQUEST.value(), "X-Tenant-ID must be a canonical UUID");
+            return;
+        }
+        if (!tenantId.toString().equalsIgnoreCase(requestedTenant)) {
+            response.sendError(HttpStatus.BAD_REQUEST.value(), "X-Tenant-ID must be a canonical UUID");
             return;
         }
 
