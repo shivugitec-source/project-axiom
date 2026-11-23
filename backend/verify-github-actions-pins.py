@@ -21,7 +21,7 @@ ALIASED_MAPPING_KEY = re.compile(
 )
 # YAML permits an anchor and a tag on the same node, in either order.
 # Treat one or more node properties before a mapping key as unsupported.
-YAML_NODE_PROPERTY = r"(?:&[^\s]+|!![^\s]+|![^\s]+)"
+YAML_NODE_PROPERTY = r"(?:&[^\s]+|!![^\s]+|!(?:[^\s]+)?)"
 DECORATED_MAPPING_KEY = re.compile(
     rf"""(?:^\s*(?:-\s*)?|\{{\s*|,\s*)(?:{YAML_NODE_PROPERTY}\s+)+(?:'[^']*'|"(?:[^"\\]|\\.)*"|[^\s:]+)\s*:"""
 )

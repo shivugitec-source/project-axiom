@@ -134,6 +134,23 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
             all("explicit, anchored, aliased, or tagged" in error for error in errors)
         )
 
+    def test_rejects_non_specific_yaml_tag_on_uses_keys(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\\n"
+            "  - ! uses: vendor/action@main\\n"
+            "  - {! uses: vendor/action@main}\\n"
+            "  - ! &first uses: vendor/action@main\\n"
+            "  - &second ! uses: vendor/action@main\\n"
+            "  - {! &third uses: vendor/action@main}\\n"
+            "  - {&fourth ! uses: vendor/action@main}\\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(6, len(errors))
+        self.assertTrue(
+            all("explicit, anchored, aliased, or tagged" in error for error in errors)
+        )
+
     def test_accepts_quoted_flow_style_pinned_action_references(self) -> None:
         self.write_workflow(
             "ci.yml",

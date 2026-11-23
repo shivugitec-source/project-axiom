@@ -293,3 +293,10 @@
 - Extended the fail-closed mapping-key guard to recognize one or more anchor/tag node properties before a key, regardless of property order.
 - Added regression fixtures for all four valid flow/block-style and anchor/tag ordering combinations; each contains a mutable external action reference and must be rejected.
 - This is CI supply-chain verification only. It does not change application runtime behavior, database roles, migrations, RLS, credentials or deployment infrastructure.
+
+### Engineering E-21 — Reject non-specific YAML tag properties on action keys
+- An adversarial YAML-parser check found that YAML's bare non-specific `!` tag is a valid node property without a suffix. A tagged `uses` mapping key such as `! uses:` decodes to the actual key, but the verifier's prior property recognizer only matched named tag spellings.
+- Extended the fail-closed node-property recognizer to include the bare `!` form, both alone and combined with an anchor.
+- Added six regression fixtures covering block and flow mappings, bare tags, and both anchor/tag property orders. Each fixture was independently parsed as valid YAML and confirmed to decode to a mutable external action reference under the actual `uses` key.
+- The test suite remains Python-standard-library-only; parser validation was performed during review and adds no runtime or CI dependency.
+- CI supply-chain verifier only; no application runtime, schema, migration, RLS, database privilege, credential or deployment change.
