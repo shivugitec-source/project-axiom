@@ -32,6 +32,8 @@ The integration tests require a reachable PostgreSQL 17 database. GitHub Actions
 
 The runtime database role is also isolated in PostgreSQL's role-membership graph. `axiom_app` must not be a member of another role, and no other role may be a direct or transitive member of `axiom_app`. A policy declared `TO axiom_app` can also apply to roles that are members of `axiom_app`; `NOINHERIT` alone is not a substitute for eliminating role-switching paths. The PostgreSQL integration suite checks both directions. Do not grant role membership to or from the runtime login; any future platform-role design must review the effective RLS audience and `SET ROLE` privileges explicitly.
 
+The migration database role is isolated from role membership as well. `axiom_migrator` must not be a member of another role, and no other role may be a direct or transitive member of `axiom_migrator`. The existing direct-membership check protects against the migration identity assuming another role; a recursive `pg_auth_members` check rejects roles that could assume the migration identity with `SET ROLE`. `NOINHERIT` alone does not prevent role switching. Do not grant membership to or from the migration identity.
+
 ## Start PostgreSQL locally
 ```bash
 docker compose -f deployment/compose/docker-compose.yml up -d postgres
