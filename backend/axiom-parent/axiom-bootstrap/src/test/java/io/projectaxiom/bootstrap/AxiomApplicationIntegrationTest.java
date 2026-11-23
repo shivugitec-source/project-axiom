@@ -57,7 +57,7 @@ class AxiomApplicationIntegrationTest {
 
     private record RlsPolicy(
             String name, String permissive, String command, String usingExpression, String checkExpression,
-            boolean appliesToRuntime) {
+            boolean appliesOnlyToRuntime) {
     }
 
     private static String normalizePolicyExpression(String expression) {
@@ -378,8 +378,7 @@ class AxiomApplicationIntegrationTest {
 
             List<RlsPolicy> policies = jdbcTemplate.query("""
                     SELECT policyname, permissive, cmd, qual, with_check,
-                           roles @> ARRAY['public']::name[]
-                               OR roles @> ARRAY['axiom_app']::name[] AS applies_to_runtime
+                           roles = ARRAY['axiom_app']::name[] AS applies_only_to_runtime
                     FROM pg_policies
                     WHERE schemaname = 'axiom' AND tablename = ?
                     ORDER BY policyname
@@ -389,7 +388,7 @@ class AxiomApplicationIntegrationTest {
                     rs.getString("cmd"),
                     rs.getString("qual"),
                     rs.getString("with_check"),
-                    rs.getBoolean("applies_to_runtime")), table);
+                    rs.getBoolean("applies_only_to_runtime")), table);
             assertThat(policies)
                     .as(table + " must have exactly one tenant-isolation policy")
                     .hasSize(1);
@@ -398,8 +397,8 @@ class AxiomApplicationIntegrationTest {
             assertThat(policy.name()).isEqualTo(table + "_tenant_isolation");
             assertThat(policy.permissive()).isEqualTo("PERMISSIVE");
             assertThat(policy.command()).isEqualTo("ALL");
-            assertThat(policy.appliesToRuntime())
-                    .as(table + " tenant policy must apply to the restricted axiom_app runtime role")
+            assertThat(policy.appliesOnlyToRuntime())
+                    .as(table + " tenant policy must apply only to the restricted axiom_app runtime role")
                     .isTrue();
             assertThat(policy.usingExpression()).isNotNull();
             assertThat(policy.checkExpression()).isNotNull();
