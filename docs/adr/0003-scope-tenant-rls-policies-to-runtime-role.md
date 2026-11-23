@@ -7,7 +7,7 @@
 
 PostgreSQL policies created without a `TO` clause apply to `PUBLIC`. The tenant-owned tables already had forced row-level security, the exact tenant-context predicate, and grants limited to the runtime application role. However, the policy audience was broader than the only application role intended to use these tables. If another database role later received table privileges, a caller able to set the tenant GUC could also satisfy the PUBLIC policy.
 
-The existing V2–V5 migration files are immutable and must not be edited. V6 already establishes the dedicated `axiom_app` role before this new policy revision is applied.
+The existing V2–V5 migration files are immutable and must not be edited. The `axiom_app` role is provisioned by database initialization or CI before Flyway runs; V6 grants it the runtime table privileges, and V7 follows those grants.
 
 ## Decision
 
