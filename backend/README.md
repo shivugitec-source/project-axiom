@@ -134,3 +134,7 @@ Check:
 ## Request-scoped tenant context lifecycle
 
 `TenantContext.open(...)` returns an AutoCloseable scope backed by a thread-local value. The scope must be closed by the same thread that opened it. Closing it from another thread now fails fast and leaves the scope open so its owner can still remove the thread-local value. This prevents a cross-thread close from marking the scope closed after removing only the other thread's ThreadLocal, which would leave the original request thread's tenant context bound. Tenant context is not implicitly propagated to asynchronous work; asynchronous execution must establish and close its own verified context on the executing thread.
+
+## GitHub Actions supply-chain policy
+
+Every external action referenced from `.github/workflows` must be pinned to its full 40-character upstream commit SHA, not a mutable release tag or branch. Container actions must use an immutable `sha256` image digest. Local actions and reusable workflows are allowed because they are resolved from the checked-out repository revision. Backend CI runs `backend/verify-github-actions-pins.py` and its standard-library regression tests to enforce this rule. When upgrading an action, inspect the intended upstream release and its commit, then update the pinned SHA while retaining the release tag as a comment for readability. This protects the workflow from tag retargeting; it does not replace review of an action's own dependencies or source.
