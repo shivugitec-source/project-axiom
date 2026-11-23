@@ -14,7 +14,7 @@ from pathlib import Path
 # Reject YAML mapping-key forms whose meaning requires resolving YAML indirection.
 # This line-oriented, standard-library verifier deliberately fails closed on them.
 EXPLICIT_MAPPING_KEY = re.compile(
-    r"""(?:^\s*(?:-\s*)?|\{\s*|,\s*)\?\s+"""
+    r"""(?:^\s*(?:-\s*)?|\{{\s*|,\s*)\?\s+"""
 )
 ALIASED_MAPPING_KEY = re.compile(
     r"""(?:^\s*(?:-\s*)?|\{\s*|,\s*)\*[^\s,:{}]+\s*:"""
