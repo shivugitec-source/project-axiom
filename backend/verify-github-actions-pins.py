@@ -9,9 +9,10 @@ import sys
 from pathlib import Path
 
 
-# Match block mappings and flow mappings, including quoted YAML keys.
+# Match block mappings and flow mappings. Escaped double-quoted keys are
+# rejected below because YAML decodes them before GitHub interprets mapping keys.
 USES_KEY = re.compile(
-    r"""^\s*(?:-\s*)?(?:uses|'uses'|"uses")\s*:\s*|[{,]\s*(?:uses|'uses'|"uses")\s*:\s*"""
+    r"""^\s*(?:-\s*)?(?P<block_key>uses|'uses'|"(?:[^"\\\\]|\\\\.)*")\s*:\s*|[{,]\s*(?P<flow_key>uses|'uses'|"(?:[^"\\\\]|\\\\.)*")\s*:\s*"""
 )
 EXTERNAL_ACTION = re.compile(
     r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-fA-F]{40}$"
@@ -112,6 +113,19 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
         for line_number, line in enumerate(lines, start=1):
             uncommented = strip_yaml_comment(line)
             for match in USES_KEY.finditer(uncommented):
+                key = match.group("block_key") or match.group("flow_key")
+                if key.startswith('"'):
+                    if "\\" in key:
+                        violations.append(
+                            f"{workflow_file}:{line_number}: escaped double-quoted YAML mapping "
+                            "keys are unsupported because they can disguise the 'uses' key"
+                        )
+                        continue
+                    if key != '"uses"':
+                        continue
+                elif key not in {"uses", "'uses'"}:
+                    continue
+
                 reference = extract_reference(uncommented[match.end() :])
                 if is_safe_local_reference(reference):
                     continue
