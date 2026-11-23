@@ -280,3 +280,10 @@
 - Tightened the OIDC `X-Tenant-ID` parser to require the standard 36-character UUID representation, allowing hexadecimal case differences but rejecting noncanonical spellings that Java 21's `UUID.fromString` accepts (including shortened groups and leading plus signs).
 - Added regression coverage proving noncanonical values return HTTP 400 before membership lookup, while canonical uppercase UUID values remain accepted.
 - This closes a parser-normalization ambiguity at the tenant boundary; it does not change tenant membership, authorization, RLS, database schema, migrations or API permissions.
+
+### Engineering E-19 — Pin GitHub Actions to immutable revisions
+- Replaced mutable `v5` references for `actions/checkout` and `actions/setup-java` with the exact upstream commit SHAs for their v5 releases; release labels remain as comments for maintainability.
+- Added a standard-library workflow verifier that scans every `.yml` and `.yaml` file under `.github/workflows`. External actions require full 40-character commit SHAs, container actions require SHA-256 digests, and local actions/reusable workflows are limited to repository-relative paths without parent-directory traversal. The verifier recognizes block-style and flow-style YAML mappings.
+- Added fixture regression coverage for pinned references, mutable tags/branches, abbreviated SHAs, block- and flow-style mappings, escaped double-quoted key rejection, explicit/anchored/aliased/tagged mapping-key rejection, safe local workflows, rejected local path traversal, container digests, nested workflow files and missing workflow directories.
+- The verifier fails closed on YAML key indirection rather than trying to resolve explicit keys, anchors, aliases or tags with a line-oriented standard-library scanner.
+- This is a CI supply-chain boundary; it does not change application runtime behavior, database roles, migrations, RLS or deployment infrastructure.
