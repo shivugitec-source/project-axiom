@@ -166,6 +166,32 @@ class AxiomApplicationIntegrationTest {
     }
 
     @Test
+    void runtimeRoleHasNoDirectOrIndirectMembers() {
+        List<String> memberRoles = jdbcTemplate.queryForList("""
+                WITH RECURSIVE runtime_role_members(member_oid) AS (
+                    SELECT member
+                    FROM pg_auth_members
+                    WHERE roleid = (
+                        SELECT oid FROM pg_roles WHERE rolname = current_user
+                    )
+                    UNION
+                    SELECT membership.member
+                    FROM pg_auth_members membership
+                    JOIN runtime_role_members nested_member
+                      ON membership.roleid = nested_member.member_oid
+                )
+                SELECT member_role.rolname
+                FROM runtime_role_members
+                JOIN pg_roles member_role ON member_role.oid = runtime_role_members.member_oid
+                ORDER BY member_role.rolname
+                """, String.class);
+
+        assertThat(memberRoles)
+                .as("no other database role may be a direct or transitive member of the runtime application role")
+                .isEmpty();
+    }
+
+    @Test
     void migrationRoleOwnsSchemaAndRuntimeRoleCannotOwnDatabaseObjects() {
         assertThat(jdbcTemplate.queryForObject("SELECT current_user", String.class))
                 .isEqualTo("axiom_app");
