@@ -7,6 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import io.projectaxiom.common.TenantContext;
@@ -35,7 +37,7 @@ class TenantContextFilterTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new AxiomAuthenticationToken(null, new AxiomPrincipal(identityId, "issuer", "subject")));
         when(identityService.hasActiveMembership(tenantId, identityId)).thenReturn(true);
-        MockHttpServletRequest request = request(tenantId.toString());
+        MockHttpServletRequest request = request(tenantId.toString().toUpperCase(Locale.ROOT));
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = (req, res) -> assertThat(TenantContext.currentTenantId()).isEqualTo(tenantId);
 
@@ -70,6 +72,20 @@ class TenantContextFilterTest {
         });
         assertThat(response.getStatus()).isEqualTo(400);
         verify(identityService, never()).hasActiveMembership(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void rejectsNonCanonicalTenantUuidSpellingsBeforeMembershipLookup() throws Exception {
+        for (String nonCanonical : List.of("1-1-1-1-1", "+1-1-1-1-1")) {
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            filter.doFilter(request(nonCanonical), response, (req, res) -> {
+                throw new AssertionError("non-canonical tenant selector must not continue");
+            });
+            assertThat(response.getStatus()).isEqualTo(400);
+        }
+
+        verify(identityService, never()).hasActiveMembership(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
 
