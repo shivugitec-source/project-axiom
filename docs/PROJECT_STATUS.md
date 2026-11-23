@@ -348,3 +348,16 @@
 - Added a positive catalog regression case against a test-only three-role graph: the query must discover both a direct member and a nested transitive member. This prevents the security assertions from passing solely because the CI database happens to contain no memberships.
 - Provisioned the `NOLOGIN` fixture roles in local PostgreSQL initialization and Backend CI. They receive no Axiom database/schema grants and are unrelated to `axiom_app` and `axiom_migrator`.
 - No production role memberships, database privileges, schema, migrations, RLS policies, credentials or API behavior changed.
+
+
+### Engineering E-26 — Pin GitHub Actions service images to immutable OCI digests
+- Backend CI previously selected PostgreSQL through the mutable postgres:17-alpine tag. A tag can move independently of the reviewed workflow revision, changing the database image used by the same commit.
+- Pin the CI service to postgres:17.12-alpine@sha256:f9cf3e1f0066f0eb0c48707d864f0ac5941e9ff454a072077d97a4d278d07d73, the multi-platform OCI index published in Docker Library's official image metadata.
+- Extend the standard-library workflow verifier to inspect block- and flow-style image: mappings and require a full SHA-256 digest. Add fixtures for pinned images, mutable tags, abbreviated digests, multiple flow mappings and escaped quoted keys.
+- This is CI supply-chain hardening only. It does not change PostgreSQL major version, application runtime, database schema, migrations, grants, RLS, credentials or deployment infrastructure.
+
+### Validation recovery — Engineering E-26
+- Initial exact-head push CI #411 (run 45268354715) and PR CI #412 (run 45268394770) failed on SHA db7b91bdecafedb90f216ca67ed94550fe395cc8 in the Python regression step. Both runs reported 63 tests with two failures: the escaped-double-quoted uses and image key tests each received two violations instead of one.
+- Root cause was verifier classification, not the PostgreSQL service image or runner. Both scanners treated every escaped double-quoted mapping key as their own protected key, so the uses scanner also rejected escaped image and the image scanner also rejected escaped uses.
+- The correction decodes escaped double-quoted scalars and rejects them only when they resolve to the protected key being scanned (uses or image). Added coverage for a hexadecimal escape that resolves to uses and for an escaped unrelated name key, while retaining the Unicode-escape regression cases.
+- The failed jobs successfully pulled the pinned PostgreSQL 17.12 image by the declared digest and reported the service healthy before the test failure.

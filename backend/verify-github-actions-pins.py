@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Require immutable references for external actions used by GitHub workflows."""
+"""Require immutable references for GitHub Actions and workflow service images."""
 
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from pathlib import Path
@@ -33,6 +34,10 @@ EXTERNAL_ACTION = re.compile(
     r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-fA-F]{40}$"
 )
 DOCKER_ACTION = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-fA-F]{64}$")
+IMAGE_KEY = re.compile(
+    r"""^\s*(?:-\s*)?(?P<block_key>image|'image'|"(?:[^"\\]|\\.)*")\s*:\s*|[{,]\s*(?P<flow_key>image|'image'|"(?:[^"\\]|\\.)*")\s*:\s*"""
+)
+IMAGE_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*@sha256:[0-9a-fA-F]{64}$")
 
 
 def strip_yaml_comment(line: str) -> str:
@@ -103,6 +108,17 @@ def is_safe_local_reference(reference: str) -> bool:
     return bool(segments) and all(segment not in {"", ".", ".."} for segment in segments)
 
 
+def is_escaped_double_quoted_key(key: str, expected: str) -> bool:
+    """Return whether an escaped YAML double-quoted key decodes to expected."""
+    if not key.startswith('"') or "\\" not in key:
+        return False
+    try:
+        decoded = ast.literal_eval(key)
+    except (SyntaxError, ValueError):
+        return False
+    return isinstance(decoded, str) and decoded == expected
+
+
 def verify_workflows(workflow_directory: Path) -> list[str]:
     """Return violations for mutable or unsupported workflow action references."""
     if not workflow_directory.is_dir():
@@ -140,16 +156,14 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
 
             for match in USES_KEY.finditer(uncommented):
                 key = match.group("block_key") or match.group("flow_key")
-                if key.startswith('"'):
-                    if "\\" in key:
+                if key.startswith('"') and "\\" in key:
+                    if is_escaped_double_quoted_key(key, "uses"):
                         violations.append(
                             f"{workflow_file}:{line_number}: escaped double-quoted YAML mapping "
                             "keys are unsupported because they can disguise the 'uses' key"
                         )
-                        continue
-                    if key != '"uses"':
-                        continue
-                elif key not in {"uses", "'uses'"}:
+                    continue
+                if key not in {"uses", "'uses'", '"uses"'}:
                     continue
 
                 reference = extract_reference(uncommented[match.end() :])
@@ -161,6 +175,27 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
                 violations.append(
                     f"{workflow_file}:{line_number}: external action must use a full "
                     f"40-character commit SHA (or a container digest): {reference!r}"
+                )
+
+            for match in IMAGE_KEY.finditer(uncommented):
+                key = match.group("block_key") or match.group("flow_key")
+                if key.startswith('"') and "\\" in key:
+                    if is_escaped_double_quoted_key(key, "image"):
+                        violations.append(
+                            f"{workflow_file}:{line_number}: escaped double-quoted YAML mapping "
+                            "keys are unsupported because they can disguise an 'image' key"
+                        )
+                    continue
+                if key not in {"image", "'image'", '"image"'}:
+                    continue
+
+                reference = extract_reference(uncommented[match.end() :])
+                if IMAGE_REFERENCE.fullmatch(reference):
+                    continue
+
+                violations.append(
+                    f"{workflow_file}:{line_number}: workflow service/container image "
+                    f"must use a full sha256 digest: {reference!r}"
                 )
 
     return violations
@@ -184,7 +219,7 @@ def main() -> int:
             print(f"ERROR: {violation}", file=sys.stderr)
         return 1
 
-    print("GitHub workflow action references use immutable revisions.")
+    print("GitHub workflow actions and service images use immutable revisions/digests.")
     return 0
 
 

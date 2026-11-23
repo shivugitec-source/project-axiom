@@ -187,6 +187,68 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         )
         self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
 
+    def test_accepts_digest_pinned_service_image(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "services:\n  postgres:\n    image: postgres:17.12-alpine@sha256:"
+            + "a" * 64
+            + "\n",
+        )
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
+    def test_rejects_mutable_service_image_tag(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "services:\n  postgres:\n    image: postgres:17-alpine\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("service/container image", errors[0])
+
+    def test_rejects_short_service_image_digest(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "services:\n  postgres:\n    image: postgres:17-alpine@sha256:1234abcd\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("full sha256 digest", errors[0])
+
+    def test_checks_every_flow_image_mapping_on_same_line(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "services: [{ image: postgres:17-alpine@sha256:"
+            + "a" * 64
+            + " }, { image: postgres:17-alpine }, { image: redis:latest }]",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(2, len(errors))
+
+    def test_rejects_escaped_double_quoted_image_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            'services:\n  postgres:\n    {"\\u0069mage": postgres:17-alpine}\n',
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("escaped double-quoted", errors[0])
+
+    def test_rejects_hex_escaped_double_quoted_uses_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            'steps:\n  - {"\\x75ses": vendor/action@main}\n',
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("escaped double-quoted", errors[0])
+
+    def test_ignores_escaped_unrelated_double_quoted_mapping_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            'steps:\n  - {"\\u006eame": Checkout}\n',
+        )
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
     def test_scans_nested_workflow_files(self) -> None:
         self.write_workflow("nested/ci.yaml", "steps:\n  - uses: vendor/action@v5\n")
         self.assertEqual(1, len(VERIFIER.verify_workflows(self.workflow_directory)))
