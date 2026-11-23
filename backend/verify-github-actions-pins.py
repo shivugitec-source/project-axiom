@@ -9,11 +9,11 @@ import sys
 from pathlib import Path
 
 
-USES_LINE = re.compile(r"^\\s*uses\\s*:\\s*(.*?)\\s*$")
+USES_LINE = re.compile(r"^\s*(?:-\s*)?uses\s*:\s*(.*?)\s*$")
 EXTERNAL_ACTION = re.compile(
     r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-fA-F]{40}$"
 )
-DOCKER_ACTION = re.compile(r"^docker://[^@\\s]+@sha256:[0-9a-fA-F]{64}$")
+DOCKER_ACTION = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-fA-F]{64}$")
 
 
 def normalize_reference(raw_value: str) -> str:
