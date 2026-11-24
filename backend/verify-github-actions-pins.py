@@ -38,6 +38,14 @@ IMAGE_KEY = re.compile(
     r"""^\s*(?:-\s*)?(?P<block_key>image|'image'|"(?:[^"\\]|\\.)*")\s*:\s*|[{,]\s*(?P<flow_key>image|'image'|"(?:[^"\\]|\\.)*")\s*:\s*"""
 )
 IMAGE_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*@sha256:[0-9a-fA-F]{64}$")
+STEP_START = re.compile(r"^(?P<indent> *)-\s+")
+YAML_MAPPING_KEY = r"""(?:'(?:[^']|'')*'|"(?:[^"\\]|\\.)*"|[^:\s{}\[\],]+)"""
+BLOCK_MAPPING_KEY = re.compile(
+    rf"^(?P<indent> *)(?P<key>{YAML_MAPPING_KEY})\s*:\s*(?P<value>.*?)\s*$"
+)
+FLOW_MAPPING_KEY = re.compile(
+    rf"""(?:^|[{{,])\s*(?P<key>{YAML_MAPPING_KEY})\s*:"""
+)
 
 
 def strip_yaml_comment(line: str) -> str:
@@ -118,6 +126,384 @@ def is_escaped_double_quoted_key(key: str, expected: str) -> bool:
         return False
     return isinstance(decoded, str) and decoded == expected
 
+def decode_yaml_mapping_key(raw_key: str) -> str | None:
+    """Decode a quoted YAML key without resolving aliases or YAML node properties."""
+    if raw_key.startswith(("'", '"')):
+        try:
+            decoded = ast.literal_eval(raw_key)
+        except (SyntaxError, ValueError):
+            return None
+        return decoded if isinstance(decoded, str) else None
+    return raw_key
+
+
+def has_unsupported_mapping_key(line: str) -> bool:
+    """Reject YAML key indirection and merge syntax in workflow documents."""
+    return any(
+        pattern.search(line)
+        for pattern in (EXPLICIT_MAPPING_KEY, ALIASED_MAPPING_KEY, DECORATED_MAPPING_KEY)
+    ) or re.search(r"(?:^\s*(?:-\s*)?|[{,])\s*<<\s*:", line) is not None
+
+
+def flow_delimiters_balanced(value: str) -> bool:
+    """Require flow collections to be complete on one line for fail-closed scanning."""
+    stack: list[str] = []
+    quote: str | None = None
+    index = 0
+    while index < len(value):
+        character = value[index]
+        if quote == "'":
+            if character == "'" and index + 1 < len(value) and value[index + 1] == "'":
+                index += 2
+                continue
+            if character == "'":
+                quote = None
+        elif quote == '"':
+            if character == "\\":
+                index += 2
+                continue
+            if character == '"':
+                quote = None
+        elif character in {"'", '"'}:
+            quote = character
+        elif character in {"[", "{"}:
+            stack.append("]" if character == "[" else "}")
+        elif character in {"]", "}"}:
+            if not stack or stack.pop() != character:
+                return False
+        index += 1
+    return quote is None and not stack
+
+
+def extract_flow_mapping(line: str, value_start: int) -> tuple[str, int] | None:
+    """Extract one flow mapping and its end offset, respecting nested collections and quotes."""
+    index = value_start
+    while index < len(line) and line[index].isspace():
+        index += 1
+    if index >= len(line) or line[index] != "{":
+        return None
+
+    contents_start = index + 1
+    stack = ["}"]
+    quote: str | None = None
+    index += 1
+    while index < len(line):
+        character = line[index]
+        if quote == "'":
+            if character == "'" and index + 1 < len(line) and line[index + 1] == "'":
+                index += 2
+                continue
+            if character == "'":
+                quote = None
+        elif quote == '"':
+            if character == "\\":
+                index += 2
+                continue
+            if character == '"':
+                quote = None
+        elif character in {"'", '"'}:
+            quote = character
+        elif character in {"{", "["}:
+            stack.append("}" if character == "{" else "]")
+        elif character in {"}", "]"}:
+            if not stack or stack.pop() != character:
+                return None
+            if not stack:
+                return line[contents_start:index], index + 1
+        index += 1
+    return None
+
+
+def flow_mapping_ranges(line: str) -> list[tuple[int, int, str]]:
+    """Find flow mappings outside quoted scalars, including nested mappings."""
+    ranges: list[tuple[int, int, str]] = []
+    quote: str | None = None
+    index = 0
+    while index < len(line):
+        character = line[index]
+        if quote == "'":
+            if character == "'" and index + 1 < len(line) and line[index + 1] == "'":
+                index += 2
+                continue
+            if character == "'":
+                quote = None
+        elif quote == '"':
+            if character == "\\":
+                index += 2
+                continue
+            if character == '"':
+                quote = None
+        elif character in {"'", '"'}:
+            quote = character
+        elif character == "{":
+            extracted = extract_flow_mapping(line, index)
+            if extracted is not None:
+                contents, end = extracted
+                ranges.append((index, end, contents))
+        index += 1
+    return ranges
+
+
+def split_flow_mapping_entries(
+    contents: str, *, allow_nested: bool = False
+) -> list[str] | None:
+    """Split a flow mapping at top-level commas while respecting quotes and nesting."""
+    entries: list[str] = []
+    start = 0
+    stack: list[str] = []
+    quote: str | None = None
+    index = 0
+    while index < len(contents):
+        character = contents[index]
+        if quote == "'":
+            if character == "'" and index + 1 < len(contents) and contents[index + 1] == "'":
+                index += 2
+                continue
+            if character == "'":
+                quote = None
+        elif quote == '"':
+            if character == "\\":
+                index += 2
+                continue
+            if character == '"':
+                quote = None
+        elif character in {"'", '"'}:
+            quote = character
+        elif character in {"{", "["}:
+            if not allow_nested:
+                return None
+            stack.append("}" if character == "{" else "]")
+        elif character in {"}", "]"}:
+            if not allow_nested or not stack or stack.pop() != character:
+                return None
+        elif character == "," and not stack:
+            entry = contents[start:index].strip()
+            if not entry:
+                return None
+            entries.append(entry)
+            start = index + 1
+        index += 1
+
+    if quote is not None or stack:
+        return None
+    tail = contents[start:].strip()
+    if tail:
+        entries.append(tail)
+    elif contents.strip() and not contents.rstrip().endswith(","):
+        return None
+    return entries
+
+
+def flow_credentials_disabled(contents: str) -> bool:
+    """Require one canonical, literal false entry in a flat flow-style input map."""
+    if has_unsupported_mapping_key(contents):
+        return False
+
+    entries = split_flow_mapping_entries(contents)
+    if entries is None:
+        return False
+
+    values: list[tuple[str, str]] = []
+    for entry in entries:
+        match = re.match(
+            rf"^\s*(?P<key>{YAML_MAPPING_KEY})\s*:\s*(?P<value>.*?)\s*$",
+            entry,
+        )
+        if match is None:
+            return False
+        raw_key = match.group("key")
+        decoded_key = decode_yaml_mapping_key(raw_key)
+        if decoded_key is None:
+            return False
+        value = match.group("value").strip()
+        if value.startswith(("*", "&", "!", "{", "[")):
+            return False
+        if decoded_key == "persist-credentials":
+            values.append((raw_key, value))
+    return len(values) == 1 and values[0] == ("persist-credentials", "false")
+
+
+def is_block_scalar_header(value: str) -> bool:
+    """Recognize YAML literal/folded scalar headers so their text is not parsed as keys."""
+    return re.fullmatch(r"[|>](?:(?:[+-][1-9]?)|(?:[1-9][+-]?)|[+-]|[1-9])?", value) is not None
+
+
+def block_credentials_disabled(
+    lines: list[str], with_index: int, with_indent: int, step_end: int
+) -> bool:
+    """Require one canonical false entry among direct scalar block-style inputs."""
+    with_end = step_end
+    for candidate_index in range(with_index + 1, step_end):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        if not candidate.strip():
+            continue
+        indentation = len(candidate) - len(candidate.lstrip(" "))
+        if indentation <= with_indent:
+            with_end = candidate_index
+            break
+
+    values: list[tuple[str, str]] = []
+    input_indent: int | None = None
+    block_scalar_indent: int | None = None
+    for candidate_index in range(with_index + 1, with_end):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        if not candidate.strip():
+            continue
+        indentation = len(candidate) - len(candidate.lstrip(" "))
+
+        if block_scalar_indent is not None:
+            if indentation > block_scalar_indent:
+                continue
+            block_scalar_indent = None
+
+        if input_indent is None:
+            input_indent = indentation
+        if indentation != input_indent:
+            # Nested mappings/sequences and continuation lines are ambiguous inputs.
+            return False
+        if has_unsupported_mapping_key(candidate) or candidate.lstrip().startswith("- "):
+            return False
+
+        match = BLOCK_MAPPING_KEY.match(candidate)
+        if match is None:
+            return False
+        raw_key = match.group("key")
+        decoded_key = decode_yaml_mapping_key(raw_key)
+        value = match.group("value").strip()
+        if decoded_key == "<<":
+            return False
+        if decoded_key == "persist-credentials":
+            values.append((raw_key, value))
+        if value.startswith(("*", "&", "!", "{", "[")):
+            return False
+        if is_block_scalar_header(value):
+            block_scalar_indent = input_indent
+
+    return len(values) == 1 and values[0] == ("persist-credentials", "false")
+
+
+def checkout_credentials_disabled(
+    lines: list[str], uses_line_index: int, expected_reference: str, uses_match_start: int
+) -> bool:
+    """Require one direct, unambiguous false setting on the checkout step."""
+    uncommented = strip_yaml_comment(lines[uses_line_index])
+    if any(delimiter in uncommented for delimiter in "[]{}"):
+        if not flow_delimiters_balanced(uncommented) or has_unsupported_mapping_key(uncommented):
+            return False
+        enclosing_maps = [
+            item for item in flow_mapping_ranges(uncommented)
+            if item[0] < uses_match_start < item[1]
+        ]
+        if not enclosing_maps:
+            return False
+        _, _, step_contents = min(enclosing_maps, key=lambda item: item[1] - item[0])
+        entries = split_flow_mapping_entries(step_contents, allow_nested=True)
+        if entries is None:
+            return False
+
+        uses_entries: list[tuple[str, str]] = []
+        with_entries: list[tuple[str, str]] = []
+        for entry in entries:
+            match = re.match(
+                rf"^\s*(?P<key>{YAML_MAPPING_KEY})\s*:\s*(?P<value>.*?)\s*$",
+                entry,
+            )
+            if match is None:
+                return False
+            raw_key = match.group("key")
+            decoded_key = decode_yaml_mapping_key(raw_key)
+            if decoded_key is None:
+                return False
+            value = match.group("value").strip()
+            if decoded_key == "uses":
+                uses_entries.append((raw_key, value))
+            elif decoded_key == "with":
+                with_entries.append((raw_key, value))
+
+        if (
+            len(uses_entries) != 1
+            or uses_entries[0][0] not in {"uses", "'uses'", '"uses"'}
+            or extract_reference(uses_entries[0][1]) != expected_reference
+            or len(with_entries) != 1
+            or with_entries[0][0] != "with"
+        ):
+            return False
+        with_mapping = extract_flow_mapping(with_entries[0][1], 0)
+        if with_mapping is None or with_entries[0][1][with_mapping[1] :].strip():
+            return False
+        return flow_credentials_disabled(with_mapping[0])
+
+    step_match = STEP_START.match(uncommented)
+    current_indent = (
+        step_match.end()
+        if step_match is not None
+        else len(uncommented) - len(uncommented.lstrip(" "))
+    )
+    step_start = None
+    step_indent = None
+    for candidate_index in range(uses_line_index, -1, -1):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        match = STEP_START.match(candidate)
+        if match:
+            candidate_indent = len(match.group("indent"))
+            if candidate_index == uses_line_index or candidate_indent < current_indent:
+                step_start = candidate_index
+                step_indent = candidate_indent
+                break
+    if step_start is None or step_indent is None:
+        return False
+
+    step_end = len(lines)
+    for candidate_index in range(step_start + 1, len(lines)):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        match = STEP_START.match(candidate)
+        if match and len(match.group("indent")) <= step_indent:
+            step_end = candidate_index
+            break
+
+    with_entries: list[tuple[int, str, str, str | None]] = []
+    for candidate_index in range(step_start, step_end):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        if not candidate.strip():
+            continue
+        if has_unsupported_mapping_key(candidate):
+            return False
+
+        block_match = BLOCK_MAPPING_KEY.match(candidate)
+        if block_match is None:
+            continue
+        raw_key = block_match.group("key")
+        if decode_yaml_mapping_key(raw_key) != "with":
+            continue
+
+        candidate_indent = len(candidate) - len(candidate.lstrip(" "))
+        if candidate_indent != current_indent:
+            return False
+        value = block_match.group("value").strip()
+        if value.startswith("{"):
+            extracted = extract_flow_mapping(candidate, block_match.start("value"))
+            if extracted is None or candidate[extracted[1] :].strip():
+                return False
+            with_entries.append((candidate_index, raw_key, "inline-flow", extracted[0]))
+        elif value:
+            return False
+        else:
+            with_entries.append((candidate_index, raw_key, "block", None))
+
+    if len(with_entries) != 1 or with_entries[0][1] != "with":
+        return False
+
+    with_index, _, mapping_style, contents = with_entries[0]
+    if mapping_style == "inline-flow":
+        return contents is not None and flow_credentials_disabled(contents)
+
+    with_line = strip_yaml_comment(lines[with_index])
+    with_match = BLOCK_MAPPING_KEY.match(with_line)
+    if with_match is None or with_match.group("value").strip():
+        return False
+    with_indent = len(with_match.group("indent"))
+    return block_credentials_disabled(lines, with_index, with_indent, step_end)
+
 
 def verify_workflows(workflow_directory: Path) -> list[str]:
     """Return violations for mutable or unsupported workflow action references."""
@@ -143,14 +529,10 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
 
         for line_number, line in enumerate(lines, start=1):
             uncommented = strip_yaml_comment(line)
-            if (
-                EXPLICIT_MAPPING_KEY.search(uncommented)
-                or ALIASED_MAPPING_KEY.search(uncommented)
-                or DECORATED_MAPPING_KEY.search(uncommented)
-            ):
+            if has_unsupported_mapping_key(uncommented):
                 violations.append(
                     f"{workflow_file}:{line_number}: explicit, anchored, aliased, or tagged "
-                    "YAML mapping keys are unsupported; use a plain or quoted 'uses' key"
+                    "YAML mapping keys are unsupported; YAML merge keys are also unsupported; use a plain or quoted 'uses' key"
                 )
                 continue
 
@@ -170,6 +552,13 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
                 if is_safe_local_reference(reference):
                     continue
                 if EXTERNAL_ACTION.fullmatch(reference) or DOCKER_ACTION.fullmatch(reference):
+                    if reference.startswith("actions/checkout@") and not checkout_credentials_disabled(
+                        lines, line_number - 1, reference, match.start()
+                    ):
+                        violations.append(
+                            f"{workflow_file}:{line_number}: actions/checkout must set "
+                            "with.persist-credentials: false so later steps cannot read the checkout token"
+                        )
                     continue
 
                 violations.append(

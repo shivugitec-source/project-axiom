@@ -34,9 +34,353 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
             "ci.yml",
             "steps:\n  - uses: actions/checkout@"
             + "a" * 40
-            + " # v5\n",
+            + " # v5\n    with:\n      persist-credentials: false\n",
         )
         self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
+
+    def test_rejects_checkout_when_credentials_are_persisted(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n"
+            "  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_checkout_when_persist_credentials_is_missing(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      fetch-depth: 0\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_duplicate_checkout_persist_credentials_keys(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      persist-credentials: true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+
+    def test_rejects_quoted_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      \"persist-credentials\": true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_escaped_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      \"persist-\\u0063redentials\": true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_tagged_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      !!str persist-credentials: true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        # Both the global YAML-key guard and checkout-specific credential guard
+        # independently reject this ambiguous mapping; diagnostic count is not
+        # part of the security contract.
+        self.assertTrue(
+            any(
+                "explicit, anchored, aliased, or tagged YAML mapping keys are unsupported"
+                in error
+                for error in errors
+            )
+        )
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_rejects_aliased_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "defaults: &defaults persist-credentials\n"
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      *defaults: true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        # Both the global YAML-key guard and checkout-specific credential guard
+        # independently reject this ambiguous mapping; diagnostic count is not
+        # part of the security contract.
+        self.assertTrue(
+            any(
+                "explicit, anchored, aliased, or tagged YAML mapping keys are unsupported"
+                in error
+                for error in errors
+            )
+        )
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_rejects_quoted_duplicate_with_mapping(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "    \"with\":\n      persist-credentials: true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_flow_quoted_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { persist-credentials: false, "
+            "\"persist-credentials\": true } }]\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_flow_quoted_duplicate_with_mapping(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { persist-credentials: false }, "
+            "\"with\": { persist-credentials: true } }]\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_multiline_flow_checkout_mapping(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ",\n  with: { persist-credentials: false },\n"
+            "  with: { persist-credentials: true } }]\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_explicit_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      ? persist-credentials\n"
+            "      : true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        # Both the global YAML-key guard and checkout-specific credential guard
+        # independently reject this ambiguous mapping; diagnostic count is not
+        # part of the security contract.
+        self.assertTrue(
+            any(
+                "explicit, anchored, aliased, or tagged YAML mapping keys are unsupported"
+                in error
+                for error in errors
+            )
+        )
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_rejects_yaml_merge_key_in_checkout_inputs(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "defaults: &defaults { persist-credentials: true }\n"
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      <<: *defaults\n"
+            "      persist-credentials: false\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("YAML merge keys are also unsupported" in error for error in errors))
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_rejects_merge_key_that_inherits_checkout_and_overrides_credentials(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n"
+            "  - &checkout\n"
+            "    uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "  - <<: *checkout\n"
+            "    with:\n      persist-credentials: true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("YAML merge keys are also unsupported", errors[0])
+
+    def test_rejects_nested_persist_credentials_key_under_checkout_input(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      other:\n        persist-credentials: false\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_rejects_with_mapping_nested_under_env(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    env:\n      with:\n        persist-credentials: false\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_rejects_nested_flow_sequence_credential_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { other: [persist-credentials: false, ignored] } }]\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_ignores_credential_lookalike_inside_quoted_flow_scalar(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ', with: { other: "text, persist-credentials: false, still text" } }]\n',
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_accepts_block_scalar_text_that_looks_like_a_credential_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      note: |\n"
+            "        persist-credentials: true\n"
+            "      persist-credentials: false\n",
+        )
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
+    def test_accepts_quoted_flow_scalar_with_commas_and_direct_false_input(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { note: 'one, two', persist-credentials: false } }]\n",
+        )
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
+    def test_rejects_with_lookalike_inside_quoted_flow_step_scalar(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ', note: "text, with: { persist-credentials: false }" }]\n',
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_rejects_with_lookalike_inside_nested_env_flow_scalar(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + '\n    env: { note: "text, with: { persist-credentials: false }" }\n',
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_accepts_block_step_with_inline_flow_inputs(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with: { persist-credentials: false, fetch-depth: 0 }\n",
+        )
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
+    def test_accepts_flow_checkout_with_credentials_disabled(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { persist-credentials: false, fetch-depth: 0 } }]\n",
+        )
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
+    def test_rejects_duplicate_flow_checkout_with_mappings(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { persist-credentials: false }, "
+            "with: { persist-credentials: true } }]\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_duplicate_flow_checkout_with_mapping_that_omits_credentials(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { persist-credentials: false }, "
+            "with: { fetch-depth: 0 } }]\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
 
     def test_rejects_mutable_tags_and_branches(self) -> None:
         self.write_workflow(
