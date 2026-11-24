@@ -523,6 +523,12 @@ def workflow_permissions_are_read_only(lines: list[str], workflow_file: Path) ->
                 continue
             block_scalar_parent_indent = None
 
+        if in_jobs_block and any(delimiter in uncommented for delimiter in "{}[]") and not flow_delimiters_balanced(uncommented):
+            violations.append(
+                f"{workflow_file}:{line_number}: multi-line flow collections inside jobs are unsupported; "
+                "use complete single-line flow collections or block mappings"
+            )
+
         # Do not interpret script or other literal/folded scalar bodies as YAML.
         # A sequence item such as "- run: |" places the mapping key after "- ".
         scalar_header_text = uncommented[indentation:]
@@ -549,6 +555,11 @@ def workflow_permissions_are_read_only(lines: list[str], workflow_file: Path) ->
                         in_jobs_block = True
                     elif value.startswith("{"):
                         in_jobs_block = False
+                        if not flow_delimiters_balanced(value):
+                            violations.append(
+                                f"{workflow_file}:{line_number}: multi-line flow mappings in jobs are unsupported; "
+                                "use an inspectable block mapping or a complete single-line flow mapping"
+                            )
                     else:
                         in_jobs_block = False
                         violations.append(
