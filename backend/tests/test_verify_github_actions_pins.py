@@ -24,10 +24,92 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
-    def write_workflow(self, name: str, content: str) -> None:
+    def write_workflow(self, name: str, content: str, *, include_default_permissions: bool = True) -> None:
         path = self.workflow_directory / name
         path.parent.mkdir(parents=True, exist_ok=True)
+        if include_default_permissions:
+            content = "permissions:\n  contents: read\n\n" + content
         path.write_text(content, encoding="utf-8")
+
+    def test_accepts_canonical_read_only_workflow_permissions(self) -> None:
+        self.write_workflow("ci.yml", "jobs:\n  build:\n    runs-on: ubuntu-latest\n")
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
+    def test_rejects_missing_workflow_permissions(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "jobs:\n  build:\n    runs-on: ubuntu-latest\n",
+            include_default_permissions=False,
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("exactly one top-level permissions block" in error for error in errors))
+
+    def test_rejects_write_all_workflow_permissions(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "permissions: write-all\njobs:\n  build:\n",
+            include_default_permissions=False,
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("plain top-level block mapping" in error for error in errors))
+
+    def test_rejects_additional_workflow_permission_scopes(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "permissions:\n  contents: read\n  id-token: write\njobs:\n  build:\n",
+            include_default_permissions=False,
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("only the literal contents: read" in error for error in errors))
+
+    def test_rejects_duplicate_workflow_permissions_blocks(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "permissions:\n  contents: read\npermissions:\n  contents: read\n",
+            include_default_permissions=False,
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("exactly one top-level permissions block" in error for error in errors))
+
+    def test_rejects_flow_style_workflow_permissions(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "permissions: { contents: read }\n",
+            include_default_permissions=False,
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("plain top-level block mapping" in error for error in errors))
+
+    def test_rejects_job_level_permissions_override(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "jobs:\n  build:\n    permissions:\n      contents: write\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("job-level permissions overrides" in error for error in errors))
+
+    def test_rejects_flow_style_job_level_permissions_override(self) -> None:
+        self.write_workflow("ci.yml", "jobs:\n  build: { permissions: write-all }\n")
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("flow-style permissions mappings" in error for error in errors))
+
+    def test_rejects_escaped_workflow_permissions_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            '"\\u0070ermissions":\n  contents: read\n',
+            include_default_permissions=False,
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("plain top-level block mapping" in error for error in errors))
+
+    def test_ignores_permission_lookalikes_inside_run_scripts(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "jobs:\n  build:\n    steps:\n      - run: |\n"
+            "          echo 'permissions: write-all'\n"
+            "          echo '{ permissions: write }'\n",
+        )
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
 
     def test_accepts_full_commit_sha_with_release_comment(self) -> None:
         self.write_workflow(

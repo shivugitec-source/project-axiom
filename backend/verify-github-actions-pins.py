@@ -505,8 +505,101 @@ def checkout_credentials_disabled(
     return block_credentials_disabled(lines, with_index, with_indent, step_end)
 
 
+def workflow_permissions_are_read_only(lines: list[str], workflow_file: Path) -> list[str]:
+    """Require one canonical workflow-level permissions block containing only contents: read."""
+    violations: list[str] = []
+    top_level_permissions: list[tuple[int, str, str]] = []
+
+    for line_number, line in enumerate(lines, start=1):
+        uncommented = strip_yaml_comment(line)
+        if not uncommented.strip():
+            continue
+
+        indentation = len(uncommented) - len(uncommented.lstrip(" "))
+        block_match = BLOCK_MAPPING_KEY.match(uncommented)
+        if block_match is not None:
+            raw_key = block_match.group("key")
+            if decode_yaml_mapping_key(raw_key) == "permissions":
+                value = block_match.group("value").strip()
+                if indentation == 0:
+                    top_level_permissions.append((line_number - 1, raw_key, value))
+                elif indentation == 4:
+                    violations.append(
+                        f"{workflow_file}:{line_number}: job-level permissions overrides are unsupported; "
+                        "keep the single workflow-level contents: read grant"
+                    )
+
+        # A job may be written as a flow mapping (for example,
+        # build: { permissions: write-all }). Inspect only structural
+        # flow mappings near the workflow/job levels; step scripts are deeper
+        # and may legitimately contain text that resembles YAML.
+        if indentation <= 2:
+            for _, _, contents in flow_mapping_ranges(uncommented):
+                entries = split_flow_mapping_entries(contents, allow_nested=True)
+                if entries is None:
+                    continue
+                for entry in entries:
+                    entry_match = re.match(
+                        rf"^\s*(?P<key>{YAML_MAPPING_KEY})\s*:", entry
+                    )
+                    if entry_match is not None and decode_yaml_mapping_key(entry_match.group("key")) == "permissions":
+                        violations.append(
+                            f"{workflow_file}:{line_number}: flow-style permissions mappings are unsupported; "
+                            "use one top-level block containing only contents: read"
+                        )
+                        break
+
+    if len(top_level_permissions) != 1:
+        violations.append(
+            f"{workflow_file}: workflow must declare exactly one top-level permissions block "
+            "containing only contents: read"
+        )
+        return violations
+
+    permissions_index, raw_key, value = top_level_permissions[0]
+    if raw_key != "permissions" or value:
+        violations.append(
+            f"{workflow_file}:{permissions_index + 1}: permissions must use a plain top-level block mapping"
+        )
+        return violations
+
+    entries: list[tuple[str, str, str]] = []
+    for candidate_index in range(permissions_index + 1, len(lines)):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        if not candidate.strip():
+            continue
+        indentation = len(candidate) - len(candidate.lstrip(" "))
+        if indentation == 0:
+            break
+        if indentation != 2:
+            violations.append(
+                f"{workflow_file}:{candidate_index + 1}: workflow permissions must be a flat two-space mapping"
+            )
+            continue
+        child_match = BLOCK_MAPPING_KEY.match(candidate)
+        if child_match is None:
+            violations.append(
+                f"{workflow_file}:{candidate_index + 1}: workflow permissions contain an unsupported entry"
+            )
+            continue
+        raw_child_key = child_match.group("key")
+        decoded_child_key = decode_yaml_mapping_key(raw_child_key)
+        child_value = child_match.group("value").strip()
+        entries.append((raw_child_key, decoded_child_key or "", child_value))
+        if (raw_child_key, decoded_child_key, child_value) != ("contents", "contents", "read"):
+            violations.append(
+                f"{workflow_file}:{candidate_index + 1}: only the literal contents: read workflow permission is allowed"
+            )
+
+    if len(entries) != 1:
+        violations.append(
+            f"{workflow_file}:{permissions_index + 1}: workflow permissions must contain exactly one contents: read entry"
+        )
+    return violations
+
+
 def verify_workflows(workflow_directory: Path) -> list[str]:
-    """Return violations for mutable or unsupported workflow action references."""
+    """Return violations for read-only token permissions and immutable workflow references."""
     if not workflow_directory.is_dir():
         return [f"workflow directory does not exist: {workflow_directory}"]
 
@@ -526,6 +619,8 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
         except (OSError, UnicodeError) as exception:
             violations.append(f"cannot read workflow {workflow_file}: {exception}")
             continue
+
+        violations.extend(workflow_permissions_are_read_only(lines, workflow_file))
 
         for line_number, line in enumerate(lines, start=1):
             uncommented = strip_yaml_comment(line)
@@ -608,7 +703,7 @@ def main() -> int:
             print(f"ERROR: {violation}", file=sys.stderr)
         return 1
 
-    print("GitHub workflow actions and service images use immutable revisions/digests.")
+    print("GitHub workflows use read-only token permissions and immutable action/image references.")
     return 0
 
 
