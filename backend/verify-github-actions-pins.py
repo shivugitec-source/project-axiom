@@ -38,102 +38,22 @@ IMAGE_KEY = re.compile(
     r"""^\s*(?:-\s*)?(?P<block_key>image|'image'|"(?:[^"\\]|\\.)*")\s*:\s*|[{,]\s*(?P<flow_key>image|'image'|"(?:[^"\\]|\\.)*")\s*:\s*"""
 )
 IMAGE_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*@sha256:[0-9a-fA-F]{64}$")
-STEP_START = re.compile(r"^(?P<indent> *)-\\s+")
-WITH_MAPPING = re.compile(r"^(?P<indent> *)with\\s*:\\s*(?P<value>.*)$")
+STEP_START = re.compile(r"^(?P<indent> *)-\s+")
+WITH_MAPPING = re.compile(r"^(?P<indent> *)with\s*:\s*(?P<value>.*)$")
 PERSIST_CREDENTIALS = re.compile(
-    r"^(?P<indent> *)persist-credentials\\s*:\\s*(?P<value>.*?)\\s*$"
+    r"^(?P<indent> *)persist-credentials\s*:\s*(?P<value>.*?)\s*$"
 )
-
-
-def strip_yaml_comment(line: str) -> str:
-    """Remove a YAML comment without truncating quoted scalar content."""
-    quote: str | None = None
-    index = 0
-    while index < len(line):
-        character = line[index]
-        if quote == "'":
-            if character == "'" and index + 1 < len(line) and line[index + 1] == "'":
-                index += 2
-                continue
-            if character == "'":
-                quote = None
-        elif quote == '"':
-            if character == "\\":
-                index += 2
-                continue
-            if character == '"':
-                quote = None
-        elif character in {"'", '"'}:
-            quote = character
-        elif character == "#" and (index == 0 or line[index - 1].isspace()):
-            return line[:index]
-        index += 1
-    return line
-
-
-def extract_reference(raw_value: str) -> str:
-    """Extract a scalar action reference from block or flow-style YAML."""
-    value = raw_value.strip()
-    if not value:
-        return ""
-
-    if value[0] in {"'", '"'}:
-        quote = value[0]
-        characters: list[str] = []
-        index = 1
-        while index < len(value):
-            character = value[index]
-            if quote == "'" and character == "'" and index + 1 < len(value) and value[index + 1] == "'":
-                characters.append("'")
-                index += 2
-                continue
-            if quote == '"' and character == "\\" and index + 1 < len(value):
-                characters.append(value[index + 1])
-                index += 2
-                continue
-            if character == quote:
-                trailing = value[index + 1 :].strip()
-                if trailing and not trailing.startswith((",", "}")):
-                    return value
-                return "".join(characters)
-            characters.append(character)
-            index += 1
-        return value
-
-    # A flow-mapping value ends at its comma or closing brace. A block scalar
-    # has no such delimiter, so the same split safely leaves its full value.
-    return re.split(r"[,}]", value, maxsplit=1)[0].strip()
-
-
-def is_safe_local_reference(reference: str) -> bool:
-    """Allow only repository-relative local actions/workflows without traversal."""
-    if not reference.startswith("./") or "@" in reference:
-        return False
-    segments = reference[2:].split("/")
-    return bool(segments) and all(segment not in {"", ".", ".."} for segment in segments)
-
-
-def is_escaped_double_quoted_key(key: str, expected: str) -> bool:
-    """Return whether an escaped YAML double-quoted key decodes to expected."""
-    if not key.startswith('"') or "\\" not in key:
-        return False
-    try:
-        decoded = ast.literal_eval(key)
-    except (SyntaxError, ValueError):
-        return False
-    return isinstance(decoded, str) and decoded == expected
-
 
 
 def checkout_credentials_disabled(lines: list[str], uses_line_index: int) -> bool:
     """Require actions/checkout to remove its token from later step environments."""
     uncommented = strip_yaml_comment(lines[uses_line_index])
     inline_with = re.search(
-        r"(?:^|,)\\s*with\\s*:\\s*\\{(?P<contents>[^{}]*)\\}", uncommented
+        r"(?:^|,)\s*with\s*:\s*\{(?P<contents>[^{}]*)\}", uncommented
     )
     if inline_with:
         values = re.findall(
-            r"(?:^|,)\\s*['\\\"]?persist-credentials['\\\"]?\\s*:\\s*([^,}]+)",
+            r"""(?:^|,)\s*['"]?persist-credentials['"]?\s*:\s*([^,}]+)""",
             inline_with.group("contents"),
         )
         return len(values) == 1 and values[0].strip() == "false"
@@ -179,7 +99,7 @@ def checkout_credentials_disabled(lines: list[str], uses_line_index: int) -> boo
         if not inline_value.lstrip().startswith("{"):
             return False
         values = re.findall(
-            r"(?:^|,)\\s*['\\\"]?persist-credentials['\\\"]?\\s*:\\s*([^,}]+)",
+            r"""(?:^|,)\s*['"]?persist-credentials['"]?\s*:\s*([^,}]+)""",
             inline_value.lstrip()[1:],
         )
         return len(values) == 1 and values[0].strip() == "false"

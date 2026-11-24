@@ -34,7 +34,7 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
             "ci.yml",
             "steps:\n  - uses: actions/checkout@"
             + "a" * 40
-            + " # v5\n  with:\n    persist-credentials: false\n",
+            + " # v5\n    with:\n      persist-credentials: false\n",
         )
         self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
 
