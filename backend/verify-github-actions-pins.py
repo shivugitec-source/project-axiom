@@ -142,7 +142,7 @@ def has_unsupported_mapping_key(line: str) -> bool:
     return any(
         pattern.search(line)
         for pattern in (EXPLICIT_MAPPING_KEY, ALIASED_MAPPING_KEY, DECORATED_MAPPING_KEY)
-    ) or re.search(r"(?:^|[{,])\s*<<\s*:", line) is not None
+    ) or re.search(r"(?:^\s*(?:-\s*)?|[{,])\s*<<\s*:", line) is not None
 
 
 def flow_delimiters_balanced(value: str) -> bool:
@@ -397,7 +397,7 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
             if has_unsupported_mapping_key(uncommented):
                 violations.append(
                     f"{workflow_file}:{line_number}: explicit, anchored, aliased, or tagged "
-                    "YAML mapping keys and YAML merge keys are unsupported; use a plain or quoted 'uses' key"
+                    "YAML mapping keys are unsupported; YAML merge keys are also unsupported; use a plain or quoted 'uses' key"
                 )
                 continue
 

@@ -228,8 +228,10 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
             "      persist-credentials: false\n",
         )
         errors = VERIFIER.verify_workflows(self.workflow_directory)
-        self.assertEqual(1, len(errors))
-        self.assertIn("persist-credentials: false", errors[0])
+        self.assertTrue(any("YAML merge keys are also unsupported" in error for error in errors))
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
 
     def test_rejects_merge_key_that_inherits_checkout_and_overrides_credentials(self) -> None:
         self.write_workflow(
@@ -244,7 +246,7 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         )
         errors = VERIFIER.verify_workflows(self.workflow_directory)
         self.assertEqual(1, len(errors))
-        self.assertIn("YAML merge keys are unsupported", errors[0])
+        self.assertIn("YAML merge keys are also unsupported", errors[0])
 
     def test_accepts_flow_checkout_with_credentials_disabled(self) -> None:
         self.write_workflow(
