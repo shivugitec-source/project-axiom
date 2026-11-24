@@ -175,8 +175,8 @@ def flow_delimiters_balanced(value: str) -> bool:
     return quote is None and not stack
 
 
-def extract_flow_mapping_contents(line: str, value_start: int) -> str | None:
-    """Extract one flat flow mapping, rejecting nested collections and multiline values."""
+def extract_flow_mapping(line: str, value_start: int) -> tuple[str, int] | None:
+    """Extract one flow mapping and its end offset, respecting nested collections and quotes."""
     index = value_start
     while index < len(line) and line[index].isspace():
         index += 1
@@ -184,6 +184,7 @@ def extract_flow_mapping_contents(line: str, value_start: int) -> str | None:
         return None
 
     contents_start = index + 1
+    stack = ["}"]
     quote: str | None = None
     index += 1
     while index < len(line):
@@ -202,20 +203,54 @@ def extract_flow_mapping_contents(line: str, value_start: int) -> str | None:
                 quote = None
         elif character in {"'", '"'}:
             quote = character
-        elif character in {"{", "[", "]"}:
-            # Checkout inputs must be direct scalar entries. Nested collections can
-            # conceal a key that is not actually an input to actions/checkout.
-            return None
-        elif character == "}":
-            return line[contents_start:index]
+        elif character in {"{", "["}:
+            stack.append("}" if character == "{" else "]")
+        elif character in {"}", "]"}:
+            if not stack or stack.pop() != character:
+                return None
+            if not stack:
+                return line[contents_start:index], index + 1
         index += 1
     return None
 
 
-def split_flow_mapping_entries(contents: str) -> list[str] | None:
-    """Split a flat flow mapping at commas outside quoted scalar values."""
+def flow_mapping_ranges(line: str) -> list[tuple[int, int, str]]:
+    """Find flow mappings outside quoted scalars, including nested mappings."""
+    ranges: list[tuple[int, int, str]] = []
+    quote: str | None = None
+    index = 0
+    while index < len(line):
+        character = line[index]
+        if quote == "'":
+            if character == "'" and index + 1 < len(line) and line[index + 1] == "'":
+                index += 2
+                continue
+            if character == "'":
+                quote = None
+        elif quote == '"':
+            if character == "\\":
+                index += 2
+                continue
+            if character == '"':
+                quote = None
+        elif character in {"'", '"'}:
+            quote = character
+        elif character == "{":
+            extracted = extract_flow_mapping(line, index)
+            if extracted is not None:
+                contents, end = extracted
+                ranges.append((index, end, contents))
+        index += 1
+    return ranges
+
+
+def split_flow_mapping_entries(
+    contents: str, *, allow_nested: bool = False
+) -> list[str] | None:
+    """Split a flow mapping at top-level commas while respecting quotes and nesting."""
     entries: list[str] = []
     start = 0
+    stack: list[str] = []
     quote: str | None = None
     index = 0
     while index < len(contents):
@@ -234,9 +269,14 @@ def split_flow_mapping_entries(contents: str) -> list[str] | None:
                 quote = None
         elif character in {"'", '"'}:
             quote = character
-        elif character in {"{", "[", "]", "}"}:
-            return None
-        elif character == ",":
+        elif character in {"{", "["}:
+            if not allow_nested:
+                return None
+            stack.append("}" if character == "{" else "]")
+        elif character in {"}", "]"}:
+            if not allow_nested or not stack or stack.pop() != character:
+                return None
+        elif character == "," and not stack:
             entry = contents[start:index].strip()
             if not entry:
                 return None
@@ -244,7 +284,7 @@ def split_flow_mapping_entries(contents: str) -> list[str] | None:
             start = index + 1
         index += 1
 
-    if quote is not None:
+    if quote is not None or stack:
         return None
     tail = contents[start:].strip()
     if tail:
@@ -342,24 +382,62 @@ def block_credentials_disabled(
     return len(values) == 1 and values[0] == ("persist-credentials", "false")
 
 
-def checkout_credentials_disabled(lines: list[str], uses_line_index: int) -> bool:
-    """Require one unambiguous false setting before repository-controlled steps run."""
+def checkout_credentials_disabled(
+    lines: list[str], uses_line_index: int, expected_reference: str, uses_match_start: int
+) -> bool:
+    """Require one direct, unambiguous false setting on the checkout step."""
     uncommented = strip_yaml_comment(lines[uses_line_index])
     if any(delimiter in uncommented for delimiter in "[]{}"):
         if not flow_delimiters_balanced(uncommented) or has_unsupported_mapping_key(uncommented):
             return False
-        with_matches = [
-            match
-            for match in FLOW_MAPPING_KEY.finditer(uncommented)
-            if decode_yaml_mapping_key(match.group("key")) == "with"
+        enclosing_maps = [
+            item for item in flow_mapping_ranges(uncommented)
+            if item[0] < uses_match_start < item[1]
         ]
-        if len(with_matches) != 1 or with_matches[0].group("key") != "with":
+        if not enclosing_maps:
             return False
-        contents = extract_flow_mapping_contents(uncommented, with_matches[0].end())
-        return contents is not None and flow_credentials_disabled(contents)
+        _, _, step_contents = min(enclosing_maps, key=lambda item: item[1] - item[0])
+        entries = split_flow_mapping_entries(step_contents, allow_nested=True)
+        if entries is None:
+            return False
 
-    current_indent = len(lines[uses_line_index]) - len(
-        lines[uses_line_index].lstrip(" ")
+        uses_entries: list[tuple[str, str]] = []
+        with_entries: list[tuple[str, str]] = []
+        for entry in entries:
+            match = re.match(
+                rf"^\s*(?P<key>{YAML_MAPPING_KEY})\s*:\s*(?P<value>.*?)\s*$",
+                entry,
+            )
+            if match is None:
+                return False
+            raw_key = match.group("key")
+            decoded_key = decode_yaml_mapping_key(raw_key)
+            if decoded_key is None:
+                return False
+            value = match.group("value").strip()
+            if decoded_key == "uses":
+                uses_entries.append((raw_key, value))
+            elif decoded_key == "with":
+                with_entries.append((raw_key, value))
+
+        if (
+            len(uses_entries) != 1
+            or uses_entries[0][0] not in {"uses", "'uses'", '"uses"'}
+            or extract_reference(uses_entries[0][1]) != expected_reference
+            or len(with_entries) != 1
+            or with_entries[0][0] != "with"
+        ):
+            return False
+        with_mapping = extract_flow_mapping(with_entries[0][1], 0)
+        if with_mapping is None or with_entries[0][1][with_mapping[1] :].strip():
+            return False
+        return flow_credentials_disabled(with_mapping[0])
+
+    step_match = STEP_START.match(uncommented)
+    current_indent = (
+        step_match.end()
+        if step_match is not None
+        else len(uncommented) - len(uncommented.lstrip(" "))
     )
     step_start = None
     step_indent = None
@@ -383,7 +461,7 @@ def checkout_credentials_disabled(lines: list[str], uses_line_index: int) -> boo
             step_end = candidate_index
             break
 
-    with_entries: list[tuple[int, str, int, str]] = []
+    with_entries: list[tuple[int, str, str, str | None]] = []
     for candidate_index in range(step_start, step_end):
         candidate = strip_yaml_comment(lines[candidate_index])
         if not candidate.strip():
@@ -392,49 +470,34 @@ def checkout_credentials_disabled(lines: list[str], uses_line_index: int) -> boo
             return False
 
         block_match = BLOCK_MAPPING_KEY.match(candidate)
-        if block_match is not None:
-            raw_key = block_match.group("key")
-            if decode_yaml_mapping_key(raw_key) == "with":
-                candidate_indent = len(candidate) - len(candidate.lstrip(" "))
-                if candidate_indent != current_indent:
-                    return False
-                value = block_match.group("value").strip()
-                if value.startswith("{"):
-                    for flow_match in FLOW_MAPPING_KEY.finditer(candidate):
-                        if decode_yaml_mapping_key(flow_match.group("key")) == "with":
-                            with_entries.append(
-                                (candidate_index, flow_match.group("key"), flow_match.end(), "flow")
-                            )
-                else:
-                    with_entries.append(
-                        (
-                            candidate_index,
-                            raw_key,
-                            block_match.start("value"),
-                            "block",
-                        )
-                    )
-                continue
-            if not block_match.group("value").lstrip().startswith(("[", "{")):
-                continue
+        if block_match is None:
+            continue
+        raw_key = block_match.group("key")
+        if decode_yaml_mapping_key(raw_key) != "with":
+            continue
 
-        for flow_match in FLOW_MAPPING_KEY.finditer(candidate):
-            if decode_yaml_mapping_key(flow_match.group("key")) == "with":
-                with_entries.append(
-                    (candidate_index, flow_match.group("key"), flow_match.end(), "flow")
-                )
+        candidate_indent = len(candidate) - len(candidate.lstrip(" "))
+        if candidate_indent != current_indent:
+            return False
+        value = block_match.group("value").strip()
+        if value.startswith("{"):
+            extracted = extract_flow_mapping(candidate, block_match.start("value"))
+            if extracted is None or candidate[extracted[1] :].strip():
+                return False
+            with_entries.append((candidate_index, raw_key, "inline-flow", extracted[0]))
+        elif value:
+            return False
+        else:
+            with_entries.append((candidate_index, raw_key, "block", None))
 
     if len(with_entries) != 1 or with_entries[0][1] != "with":
         return False
 
-    with_index, _, value_start, mapping_style = with_entries[0]
-    with_line = strip_yaml_comment(lines[with_index])
-    if mapping_style == "flow":
-        if not flow_delimiters_balanced(with_line):
-            return False
-        contents = extract_flow_mapping_contents(with_line, value_start)
+    with_index, _, mapping_style, contents = with_entries[0]
+    if mapping_style == "inline-flow":
         return contents is not None and flow_credentials_disabled(contents)
 
+    with_line = strip_yaml_comment(lines[with_index])
     with_match = BLOCK_MAPPING_KEY.match(with_line)
     if with_match is None or with_match.group("value").strip():
         return False
@@ -490,7 +553,7 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
                     continue
                 if EXTERNAL_ACTION.fullmatch(reference) or DOCKER_ACTION.fullmatch(reference):
                     if reference.startswith("actions/checkout@") and not checkout_credentials_disabled(
-                        lines, line_number - 1
+                        lines, line_number - 1, reference, match.start()
                     ):
                         violations.append(
                             f"{workflow_file}:{line_number}: actions/checkout must set "

@@ -316,6 +316,39 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         )
         self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
 
+    def test_rejects_with_lookalike_inside_quoted_flow_step_scalar(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ', note: "text, with: { persist-credentials: false }" }]\\n',
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_rejects_with_lookalike_inside_nested_env_flow_scalar(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\\n  - uses: actions/checkout@"
+            + "a" * 40
+            + '\\n    env: { note: "text, with: { persist-credentials: false }" }\\n',
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
+
+    def test_accepts_block_step_with_inline_flow_inputs(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\\n    with: { persist-credentials: false, fetch-depth: 0 }\\n",
+        )
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
     def test_accepts_flow_checkout_with_credentials_disabled(self) -> None:
         self.write_workflow(
             "ci.yml",
