@@ -91,7 +91,30 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
     def test_rejects_flow_style_job_level_permissions_override(self) -> None:
         self.write_workflow("ci.yml", "jobs:\n  build: { permissions: write-all }\n")
         errors = VERIFIER.verify_workflows(self.workflow_directory)
-        self.assertTrue(any("flow-style permissions mappings" in error for error in errors))
+        self.assertTrue(any("flow-style job permissions overrides" in error for error in errors))
+
+    def test_rejects_job_level_permissions_override_with_nonstandard_indentation(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "jobs:\n    build:\n        runs-on: ubuntu-latest\n"
+            "        permissions:\n            contents: write\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("job-level permissions overrides" in error for error in errors))
+
+    def test_rejects_flow_job_permissions_override_with_nonstandard_indentation(self) -> None:
+        self.write_workflow("ci.yml", "jobs:\n    build: { permissions: write-all }\n")
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("flow-style job permissions overrides" in error for error in errors))
+
+    def test_rejects_job_mapping_alias_that_could_hide_permissions(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "defaults: &job\n  runs-on: ubuntu-latest\n  permissions:\n    contents: write\n"
+            "jobs:\n  build: *job\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("YAML anchors, aliases and tags" in error for error in errors))
 
     def test_rejects_escaped_workflow_permissions_key(self) -> None:
         self.write_workflow(
@@ -106,8 +129,8 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         self.write_workflow(
             "ci.yml",
             "jobs:\n  build:\n    steps:\n      - run: |\n"
-            "          echo 'permissions: write-all'\n"
-            "          echo '{ permissions: write }'\n",
+            "          permissions: write-all\n"
+            "          { permissions: write }\n",
         )
         self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
 

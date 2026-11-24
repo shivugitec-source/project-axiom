@@ -16,7 +16,7 @@ The workflow token is available to actions and steps for the duration of the job
        permissions:
          contents: read
 
-2. Reject missing or duplicate workflow permission blocks, scalar read-all/write-all forms, flow-style or quoted/escaped permission mappings, additional scopes, and job-level permission overrides.
+2. Reject missing or duplicate workflow permission blocks, scalar read-all/write-all forms, flow-style or quoted/escaped permission mappings, additional scopes, and job-level permission overrides at every valid indentation. Inspect nested job flow mappings and reject anchor/alias/tag indirection on job definitions; do not interpret literal or folded script bodies as YAML structure.
 3. Enforce the rule in the existing standard-library workflow verifier and regression suite. Treat ambiguous representations as unsupported rather than attempting to resolve YAML aliases, tags or merge semantics.
 4. Keep the workflow token read-only. Any future need for additional authority must be a separately reviewed architecture/security decision, not an incidental workflow edit.
 
