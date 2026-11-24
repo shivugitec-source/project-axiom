@@ -107,6 +107,31 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         errors = VERIFIER.verify_workflows(self.workflow_directory)
         self.assertTrue(any("flow-style job permissions overrides" in error for error in errors))
 
+    def test_rejects_multiline_top_level_jobs_flow_mapping(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "jobs: {\\n"
+            "  build: {\\n"
+            "    runs-on: ubuntu-latest\\n"
+            "    , permissions: write-all\\n"
+            "  }\\n"
+            "}\\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("multi-line flow mappings in jobs are unsupported" in error for error in errors))
+
+    def test_rejects_multiline_flow_mapping_inside_jobs_block(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "jobs:\\n"
+            "  build: {\\n"
+            "    runs-on: ubuntu-latest\\n"
+            "    , permissions: write-all\\n"
+            "  }\\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertTrue(any("multi-line flow collections inside jobs are unsupported" in error for error in errors))
+
     def test_rejects_job_mapping_alias_that_could_hide_permissions(self) -> None:
         self.write_workflow(
             "ci.yml",
