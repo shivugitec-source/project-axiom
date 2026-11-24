@@ -176,7 +176,7 @@ def flow_delimiters_balanced(value: str) -> bool:
 
 
 def extract_flow_mapping_contents(line: str, value_start: int) -> str | None:
-    """Extract one non-nested flow mapping, rejecting multiline or nested values."""
+    """Extract one flat flow mapping, rejecting nested collections and multiline values."""
     index = value_start
     while index < len(line) and line[index].isspace():
         index += 1
@@ -184,7 +184,6 @@ def extract_flow_mapping_contents(line: str, value_start: int) -> str | None:
         return None
 
     contents_start = index + 1
-    depth = 1
     quote: str | None = None
     index += 1
     while index < len(line):
@@ -203,36 +202,96 @@ def extract_flow_mapping_contents(line: str, value_start: int) -> str | None:
                 quote = None
         elif character in {"'", '"'}:
             quote = character
-        elif character == "{":
-            depth += 1
-            if depth > 1:
-                return None
+        elif character in {"{", "[", "]"}:
+            # Checkout inputs must be direct scalar entries. Nested collections can
+            # conceal a key that is not actually an input to actions/checkout.
+            return None
         elif character == "}":
-            depth -= 1
-            if depth == 0:
-                return line[contents_start:index]
+            return line[contents_start:index]
         index += 1
     return None
 
 
+def split_flow_mapping_entries(contents: str) -> list[str] | None:
+    """Split a flat flow mapping at commas outside quoted scalar values."""
+    entries: list[str] = []
+    start = 0
+    quote: str | None = None
+    index = 0
+    while index < len(contents):
+        character = contents[index]
+        if quote == "'":
+            if character == "'" and index + 1 < len(contents) and contents[index + 1] == "'":
+                index += 2
+                continue
+            if character == "'":
+                quote = None
+        elif quote == '"':
+            if character == "\\":
+                index += 2
+                continue
+            if character == '"':
+                quote = None
+        elif character in {"'", '"'}:
+            quote = character
+        elif character in {"{", "[", "]", "}"}:
+            return None
+        elif character == ",":
+            entry = contents[start:index].strip()
+            if not entry:
+                return None
+            entries.append(entry)
+            start = index + 1
+        index += 1
+
+    if quote is not None:
+        return None
+    tail = contents[start:].strip()
+    if tail:
+        entries.append(tail)
+    elif contents.strip() and not contents.rstrip().endswith(","):
+        return None
+    return entries
+
+
 def flow_credentials_disabled(contents: str) -> bool:
-    """Require one canonical, literal false entry in a flow-style checkout input map."""
+    """Require one canonical, literal false entry in a flat flow-style input map."""
     if has_unsupported_mapping_key(contents):
         return False
 
+    entries = split_flow_mapping_entries(contents)
+    if entries is None:
+        return False
+
     values: list[tuple[str, str]] = []
-    for match in FLOW_MAPPING_KEY.finditer(contents):
+    for entry in entries:
+        match = re.match(
+            rf"^\s*(?P<key>{YAML_MAPPING_KEY})\s*:\s*(?P<value>.*?)\s*$",
+            entry,
+        )
+        if match is None:
+            return False
         raw_key = match.group("key")
-        if decode_yaml_mapping_key(raw_key) == "persist-credentials":
-            value = contents[match.end() :].split(",", maxsplit=1)[0].strip()
+        decoded_key = decode_yaml_mapping_key(raw_key)
+        if decoded_key is None:
+            return False
+        value = match.group("value").strip()
+        if value.startswith(("*", "&", "!", "{", "[")):
+            return False
+        if decoded_key == "persist-credentials":
             values.append((raw_key, value))
     return len(values) == 1 and values[0] == ("persist-credentials", "false")
+
+
+def is_block_scalar_header(value: str) -> bool:
+    """Recognize YAML literal/folded scalar headers so their text is not parsed as keys."""
+    return re.fullmatch(r"[|>](?:(?:[+-][1-9]?)|(?:[1-9][+-]?)|[+-]|[1-9])?", value) is not None
 
 
 def block_credentials_disabled(
     lines: list[str], with_index: int, with_indent: int, step_end: int
 ) -> bool:
-    """Require one canonical false entry in a block-style checkout input map."""
+    """Require one canonical false entry among direct scalar block-style inputs."""
     with_end = step_end
     for candidate_index in range(with_index + 1, step_end):
         candidate = strip_yaml_comment(lines[candidate_index])
@@ -244,31 +303,41 @@ def block_credentials_disabled(
             break
 
     values: list[tuple[str, str]] = []
+    input_indent: int | None = None
+    block_scalar_indent: int | None = None
     for candidate_index in range(with_index + 1, with_end):
         candidate = strip_yaml_comment(lines[candidate_index])
         if not candidate.strip():
             continue
+        indentation = len(candidate) - len(candidate.lstrip(" "))
+
+        if block_scalar_indent is not None:
+            if indentation > block_scalar_indent:
+                continue
+            block_scalar_indent = None
+
+        if input_indent is None:
+            input_indent = indentation
+        if indentation != input_indent:
+            # Nested mappings/sequences and continuation lines are ambiguous inputs.
+            return False
         if has_unsupported_mapping_key(candidate) or candidate.lstrip().startswith("- "):
             return False
 
         match = BLOCK_MAPPING_KEY.match(candidate)
-        if match is not None:
-            raw_key = match.group("key")
-            decoded_key = decode_yaml_mapping_key(raw_key)
-            value = match.group("value").strip()
-            if decoded_key == "<<":
-                return False
-            if decoded_key == "persist-credentials":
-                values.append((raw_key, value))
-            if value.startswith(("{", "[")):
-                return False
-            continue
-
-        if any(
-            decode_yaml_mapping_key(flow_match.group("key")) == "persist-credentials"
-            for flow_match in FLOW_MAPPING_KEY.finditer(candidate)
-        ):
+        if match is None:
             return False
+        raw_key = match.group("key")
+        decoded_key = decode_yaml_mapping_key(raw_key)
+        value = match.group("value").strip()
+        if decoded_key == "<<":
+            return False
+        if decoded_key == "persist-credentials":
+            values.append((raw_key, value))
+        if value.startswith(("*", "&", "!", "{", "[")):
+            return False
+        if is_block_scalar_header(value):
+            block_scalar_indent = input_indent
 
     return len(values) == 1 and values[0] == ("persist-credentials", "false")
 
@@ -326,6 +395,9 @@ def checkout_credentials_disabled(lines: list[str], uses_line_index: int) -> boo
         if block_match is not None:
             raw_key = block_match.group("key")
             if decode_yaml_mapping_key(raw_key) == "with":
+                candidate_indent = len(candidate) - len(candidate.lstrip(" "))
+                if candidate_indent != current_indent:
+                    return False
                 value = block_match.group("value").strip()
                 if value.startswith("{"):
                     for flow_match in FLOW_MAPPING_KEY.finditer(candidate):
