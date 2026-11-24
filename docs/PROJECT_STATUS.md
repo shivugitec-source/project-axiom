@@ -377,3 +377,9 @@
 - Corrective SHA `359da709fd15e0928f58e710fb1e559332ba9744` restored those four helper definitions verbatim from the main-branch implementation. Exact-head push CI #419 (run 45299594908) passed on that SHA; all 31 job steps completed successfully.
 - #419 logs report 69 Python regression tests passed; Maven common 5 tests, bootstrap 49 tests (including 21 application integration tests), and migrator 2 tests all had zero failures, errors or skips. Both Maven package and verification phases reported `BUILD SUCCESS`; PostgreSQL 17.12 integration, isolated artifact checks, dedicated Flyway execution/idempotency and runtime-credentials-only verification completed successfully.
 - These failures are superseded by the green #419 run on the restored helper implementation. The recovery changes only the workflow verifier/test fixtures and checkout workflow policy; no application runtime, database schema, migrations, grants, RLS, credentials or deployment infrastructure changed.
+
+
+### Engineering E-27 verifier review — reject duplicate flow-style checkout inputs
+- Review after the green #420 run found that the checkout verifier used only the first inline flow-style `with` mapping. A second duplicate `with` key could therefore override or omit the required `persist-credentials: false` setting while the verifier accepted the first mapping.
+- Require exactly one inline flow-style `with` mapping for a checkout step. Add regression fixtures where a second mapping sets `persist-credentials: true` and where it omits the setting entirely; both must fail closed.
+- This closes an ambiguity in the workflow verifier only. The production workflow continues to use one block-style `with` mapping with `persist-credentials: false`; no runtime, database, migration, grant, RLS, credential or deployment configuration changes.

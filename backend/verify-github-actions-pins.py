@@ -126,10 +126,15 @@ def is_escaped_double_quoted_key(key: str, expected: str) -> bool:
 def checkout_credentials_disabled(lines: list[str], uses_line_index: int) -> bool:
     """Require actions/checkout to remove its token from later step environments."""
     uncommented = strip_yaml_comment(lines[uses_line_index])
-    inline_with = re.search(
-        r"(?:^|,)\s*with\s*:\s*\{(?P<contents>[^{}]*)\}", uncommented
+    inline_with_matches = list(
+        re.finditer(
+            r"(?:^|,)\s*with\s*:\s*\{(?P<contents>[^{}]*)\}", uncommented
+        )
     )
-    if inline_with:
+    if inline_with_matches:
+        if len(inline_with_matches) != 1:
+            return False
+        inline_with = inline_with_matches[0]
         values = re.findall(
             r"""(?:^|,)\s*['"]?persist-credentials['"]?\s*:\s*([^,}]+)""",
             inline_with.group("contents"),

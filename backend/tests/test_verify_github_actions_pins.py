@@ -83,6 +83,30 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         )
         self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
 
+    def test_rejects_duplicate_flow_checkout_with_mappings(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { persist-credentials: false }, "
+            "with: { persist-credentials: true } }]\\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_duplicate_flow_checkout_with_mapping_that_omits_credentials(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { persist-credentials: false }, "
+            "with: { fetch-depth: 0 } }]\\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
     def test_rejects_mutable_tags_and_branches(self) -> None:
         self.write_workflow(
             "ci.yml",
