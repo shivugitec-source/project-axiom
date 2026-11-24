@@ -74,6 +74,130 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
         self.assertEqual(1, len(errors))
         self.assertIn("persist-credentials: false", errors[0])
 
+
+    def test_rejects_quoted_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      \"persist-credentials\": true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_escaped_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      \"persist-\\u0063redentials\": true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_tagged_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      !!str persist-credentials: true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_aliased_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "defaults: &defaults persist-credentials\n"
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      *defaults: true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_quoted_duplicate_with_mapping(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "    \"with\":\n      persist-credentials: true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_flow_quoted_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { persist-credentials: false, "
+            "\"persist-credentials\": true } }]\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_flow_quoted_duplicate_with_mapping(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { persist-credentials: false }, "
+            "\"with\": { persist-credentials: true } }]\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_multiline_flow_checkout_mapping(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ",\n  with: { persist-credentials: false },\n"
+            "  with: { persist-credentials: true } }]\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_explicit_duplicate_persist_credentials_key(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      ? persist-credentials\n"
+            "      : true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_yaml_merge_key_in_checkout_inputs(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "defaults: &defaults { persist-credentials: true }\n"
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      <<: *defaults\n"
+            "      persist-credentials: false\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
     def test_accepts_flow_checkout_with_credentials_disabled(self) -> None:
         self.write_workflow(
             "ci.yml",
@@ -89,7 +213,7 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
             "steps: [{ name: Checkout, uses: actions/checkout@"
             + "a" * 40
             + ", with: { persist-credentials: false }, "
-            "with: { persist-credentials: true } }]\\n",
+            "with: { persist-credentials: true } }]\n",
         )
         errors = VERIFIER.verify_workflows(self.workflow_directory)
         self.assertEqual(1, len(errors))
@@ -101,7 +225,7 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
             "steps: [{ name: Checkout, uses: actions/checkout@"
             + "a" * 40
             + ", with: { persist-credentials: false }, "
-            "with: { fetch-depth: 0 } }]\\n",
+            "with: { fetch-depth: 0 } }]\n",
         )
         errors = VERIFIER.verify_workflows(self.workflow_directory)
         self.assertEqual(1, len(errors))

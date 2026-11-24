@@ -14,7 +14,7 @@ Subsequent workflow steps execute repository-controlled Python verification, Mav
 1. Set `persist-credentials: false` on every pinned `actions/checkout` step.
 2. Keep the workflow's explicit `contents: read` permission and full-history checkout.
 3. Extend the standard-library workflow verifier to require exactly one literal `persist-credentials: false` value in each checkout step's `with` mapping.
-4. Reject missing, enabled, duplicate or unsupported/ambiguous settings. Test block and flow-style checkout mappings.
+4. Require canonical plain with and persist-credentials keys; reject missing, enabled, duplicate, quoted/escaped, decorated, aliased, explicit-key, merge-key or multiline-flow forms. Test block and flow-style checkout mappings.
 5. Do not add credentials to later build, migration or test steps. The repository is public, so the existing fallback fetch of the main branch can remain anonymous when the push event has no usable base SHA.
 
 ## Consequences
