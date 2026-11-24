@@ -34,7 +34,52 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
             "ci.yml",
             "steps:\n  - uses: actions/checkout@"
             + "a" * 40
-            + " # v5\n",
+            + " # v5\n  with:\n    persist-credentials: false\n",
+        )
+        self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
+
+
+    def test_rejects_checkout_when_credentials_are_persisted(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n"
+            "  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_checkout_when_persist_credentials_is_missing(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      fetch-depth: 0\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_rejects_duplicate_checkout_persist_credentials_keys(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps:\n  - uses: actions/checkout@"
+            + "a" * 40
+            + "\n    with:\n      persist-credentials: false\n"
+            "      persist-credentials: true\n",
+        )
+        errors = VERIFIER.verify_workflows(self.workflow_directory)
+        self.assertEqual(1, len(errors))
+        self.assertIn("persist-credentials: false", errors[0])
+
+    def test_accepts_flow_checkout_with_credentials_disabled(self) -> None:
+        self.write_workflow(
+            "ci.yml",
+            "steps: [{ name: Checkout, uses: actions/checkout@"
+            + "a" * 40
+            + ", with: { persist-credentials: false, fetch-depth: 0 } }]\n",
         )
         self.assertEqual([], VERIFIER.verify_workflows(self.workflow_directory))
 

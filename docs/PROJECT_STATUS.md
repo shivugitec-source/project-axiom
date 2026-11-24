@@ -361,3 +361,11 @@
 - Root cause was verifier classification, not the PostgreSQL service image or runner. Both scanners treated every escaped double-quoted mapping key as their own protected key, so the uses scanner also rejected escaped image and the image scanner also rejected escaped uses.
 - The correction decodes escaped double-quoted scalars and rejects them only when they resolve to the protected key being scanned (uses or image). Added coverage for a hexadecimal escape that resolves to uses and for an escaped unrelated name key, while retaining the Unicode-escape regression cases.
 - The failed jobs successfully pulled the pinned PostgreSQL 17.12 image by the declared digest and reported the service healthy before the test failure.
+
+
+### Engineering E-27 — Do not persist the checkout token into build and test steps
+- The Backend CI workflow already limits `GITHUB_TOKEN` permissions to `contents: read`, but the default `actions/checkout` behavior persists its token in the repository's local Git configuration for subsequent steps.
+- The backend verification, Maven packaging, migration process and integration tests execute repository-controlled code. They need the checked-out source, not a Git credential.
+- Set `persist-credentials: false` on the pinned checkout action so later build/test processes cannot read the checkout token from `.git/config`. Full-history checkout remains enabled; the public repository's fallback main-branch fetch remains possible without persisted credentials.
+- Extend the standard-library workflow verifier to require exactly one `persist-credentials: false` setting for every pinned `actions/checkout` step. Missing, true, duplicate or ambiguous settings fail closed; block and flow-style fixtures cover the rule.
+- CI supply-chain hardening only. No application runtime, database schema, migrations, grants, RLS, credentials, OIDC behavior or deployment infrastructure changed.

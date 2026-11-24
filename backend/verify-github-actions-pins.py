@@ -38,6 +38,11 @@ IMAGE_KEY = re.compile(
     r"""^\s*(?:-\s*)?(?P<block_key>image|'image'|"(?:[^"\\]|\\.)*")\s*:\s*|[{,]\s*(?P<flow_key>image|'image'|"(?:[^"\\]|\\.)*")\s*:\s*"""
 )
 IMAGE_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*@sha256:[0-9a-fA-F]{64}$")
+STEP_START = re.compile(r"^(?P<indent> *)-\\s+")
+WITH_MAPPING = re.compile(r"^(?P<indent> *)with\\s*:\\s*(?P<value>.*)$")
+PERSIST_CREDENTIALS = re.compile(
+    r"^(?P<indent> *)persist-credentials\\s*:\\s*(?P<value>.*?)\\s*$"
+)
 
 
 def strip_yaml_comment(line: str) -> str:
@@ -119,6 +124,85 @@ def is_escaped_double_quoted_key(key: str, expected: str) -> bool:
     return isinstance(decoded, str) and decoded == expected
 
 
+
+def checkout_credentials_disabled(lines: list[str], uses_line_index: int) -> bool:
+    """Require actions/checkout to remove its token from later step environments."""
+    uncommented = strip_yaml_comment(lines[uses_line_index])
+    inline_with = re.search(
+        r"(?:^|,)\\s*with\\s*:\\s*\\{(?P<contents>[^{}]*)\\}", uncommented
+    )
+    if inline_with:
+        values = re.findall(
+            r"(?:^|,)\\s*['\\\"]?persist-credentials['\\\"]?\\s*:\\s*([^,}]+)",
+            inline_with.group("contents"),
+        )
+        return len(values) == 1 and values[0].strip() == "false"
+
+    current_indent = len(lines[uses_line_index]) - len(
+        lines[uses_line_index].lstrip(" ")
+    )
+    step_start = None
+    step_indent = None
+    for candidate_index in range(uses_line_index, -1, -1):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        match = STEP_START.match(candidate)
+        if match:
+            candidate_indent = len(match.group("indent"))
+            if candidate_index == uses_line_index or candidate_indent < current_indent:
+                step_start = candidate_index
+                step_indent = candidate_indent
+                break
+    if step_start is None or step_indent is None:
+        return False
+
+    step_end = len(lines)
+    for candidate_index in range(step_start + 1, len(lines)):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        match = STEP_START.match(candidate)
+        if match and len(match.group("indent")) <= step_indent:
+            step_end = candidate_index
+            break
+
+    with_blocks: list[tuple[int, int, str]] = []
+    for candidate_index in range(step_start + 1, step_end):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        match = WITH_MAPPING.match(candidate)
+        if match and len(match.group("indent")) > step_indent:
+            with_blocks.append(
+                (candidate_index, len(match.group("indent")), match.group("value"))
+            )
+    if len(with_blocks) != 1:
+        return False
+
+    with_index, with_indent, inline_value = with_blocks[0]
+    if inline_value.strip():
+        if not inline_value.lstrip().startswith("{"):
+            return False
+        values = re.findall(
+            r"(?:^|,)\\s*['\\\"]?persist-credentials['\\\"]?\\s*:\\s*([^,}]+)",
+            inline_value.lstrip()[1:],
+        )
+        return len(values) == 1 and values[0].strip() == "false"
+
+    with_end = step_end
+    for candidate_index in range(with_index + 1, step_end):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        if not candidate.strip():
+            continue
+        indentation = len(candidate) - len(candidate.lstrip(" "))
+        if indentation <= with_indent:
+            with_end = candidate_index
+            break
+
+    values: list[str] = []
+    for candidate_index in range(with_index + 1, with_end):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        match = PERSIST_CREDENTIALS.match(candidate)
+        if match and len(match.group("indent")) > with_indent:
+            values.append(match.group("value").strip())
+    return len(values) == 1 and values[0] == "false"
+
+
 def verify_workflows(workflow_directory: Path) -> list[str]:
     """Return violations for mutable or unsupported workflow action references."""
     if not workflow_directory.is_dir():
@@ -170,6 +254,13 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
                 if is_safe_local_reference(reference):
                     continue
                 if EXTERNAL_ACTION.fullmatch(reference) or DOCKER_ACTION.fullmatch(reference):
+                    if reference.startswith("actions/checkout@") and not checkout_credentials_disabled(
+                        lines, line_number - 1
+                    ):
+                        violations.append(
+                            f"{workflow_file}:{line_number}: actions/checkout must set "
+                            "with.persist-credentials: false so later steps cannot read the checkout token"
+                        )
                     continue
 
                 violations.append(

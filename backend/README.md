@@ -159,3 +159,8 @@ Backend CI pins its PostgreSQL service to the multi-platform OCI index for the D
     image: postgres:17.12-alpine@sha256:f9cf3e1f0066f0eb0c48707d864f0ac5941e9ff454a072077d97a4d278d07d73
 
 The digest is published in the Docker Library's official image metadata: https://github.com/docker-library/repo-info/blob/master/repos/postgres/remote/17.12-alpine.md. The workflow verifier rejects service/container image references without a full SHA-256 digest, including mutable tags and abbreviated digests. Updating the PostgreSQL patch image requires reviewing the upstream image metadata and changing the version tag and digest together.
+
+
+### Checkout credential isolation
+
+Backend CI sets `persist-credentials: false` on `actions/checkout`. Checkout needs the read-only workflow token to obtain the source, but subsequent repository-controlled verification, build and test steps do not. The default checkout behavior stores that token in the local Git configuration for later Git commands; disabling persistence prevents those later processes from reading it. The workflow still fetches full history, and its public-repository fallback fetch does not require a persisted credential. The workflow verifier rejects pinned checkout actions that omit this setting, enable it, or declare it ambiguously.
