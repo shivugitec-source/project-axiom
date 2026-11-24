@@ -138,7 +138,7 @@ def decode_yaml_mapping_key(raw_key: str) -> str | None:
 
 
 def has_unsupported_mapping_key(line: str) -> bool:
-    """Reject YAML key indirection and merge syntax in checkout configuration."""
+    """Reject YAML key indirection and merge syntax in workflow documents."""
     return any(
         pattern.search(line)
         for pattern in (EXPLICIT_MAPPING_KEY, ALIASED_MAPPING_KEY, DECORATED_MAPPING_KEY)
@@ -394,14 +394,10 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
 
         for line_number, line in enumerate(lines, start=1):
             uncommented = strip_yaml_comment(line)
-            if (
-                EXPLICIT_MAPPING_KEY.search(uncommented)
-                or ALIASED_MAPPING_KEY.search(uncommented)
-                or DECORATED_MAPPING_KEY.search(uncommented)
-            ):
+            if has_unsupported_mapping_key(uncommented):
                 violations.append(
                     f"{workflow_file}:{line_number}: explicit, anchored, aliased, or tagged "
-                    "YAML mapping keys are unsupported; use a plain or quoted 'uses' key"
+                    "YAML mapping keys and YAML merge keys are unsupported; use a plain or quoted 'uses' key"
                 )
                 continue
 
