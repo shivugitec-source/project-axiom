@@ -108,8 +108,19 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
             "      !!str persist-credentials: true\n",
         )
         errors = VERIFIER.verify_workflows(self.workflow_directory)
-        self.assertEqual(1, len(errors))
-        self.assertIn("persist-credentials: false", errors[0])
+        # Both the global YAML-key guard and checkout-specific credential guard
+        # independently reject this ambiguous mapping; diagnostic count is not
+        # part of the security contract.
+        self.assertTrue(
+            any(
+                "explicit, anchored, aliased, or tagged YAML mapping keys are unsupported"
+                in error
+                for error in errors
+            )
+        )
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
 
     def test_rejects_aliased_duplicate_persist_credentials_key(self) -> None:
         self.write_workflow(
@@ -121,8 +132,19 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
             "      *defaults: true\n",
         )
         errors = VERIFIER.verify_workflows(self.workflow_directory)
-        self.assertEqual(1, len(errors))
-        self.assertIn("persist-credentials: false", errors[0])
+        # Both the global YAML-key guard and checkout-specific credential guard
+        # independently reject this ambiguous mapping; diagnostic count is not
+        # part of the security contract.
+        self.assertTrue(
+            any(
+                "explicit, anchored, aliased, or tagged YAML mapping keys are unsupported"
+                in error
+                for error in errors
+            )
+        )
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
 
     def test_rejects_quoted_duplicate_with_mapping(self) -> None:
         self.write_workflow(
@@ -182,8 +204,19 @@ class VerifyGitHubActionsPinsTests(unittest.TestCase):
             "      : true\n",
         )
         errors = VERIFIER.verify_workflows(self.workflow_directory)
-        self.assertEqual(1, len(errors))
-        self.assertIn("persist-credentials: false", errors[0])
+        # Both the global YAML-key guard and checkout-specific credential guard
+        # independently reject this ambiguous mapping; diagnostic count is not
+        # part of the security contract.
+        self.assertTrue(
+            any(
+                "explicit, anchored, aliased, or tagged YAML mapping keys are unsupported"
+                in error
+                for error in errors
+            )
+        )
+        self.assertTrue(
+            any("actions/checkout must set with.persist-credentials: false" in error for error in errors)
+        )
 
     def test_rejects_yaml_merge_key_in_checkout_inputs(self) -> None:
         self.write_workflow(
