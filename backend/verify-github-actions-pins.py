@@ -505,8 +505,162 @@ def checkout_credentials_disabled(
     return block_credentials_disabled(lines, with_index, with_indent, step_end)
 
 
+def workflow_permissions_are_read_only(lines: list[str], workflow_file: Path) -> list[str]:
+    """Require one canonical workflow permission block and reject job-level overrides."""
+    violations: list[str] = []
+    top_level_permissions: list[tuple[int, str, str]] = []
+    in_jobs_block = False
+    block_scalar_parent_indent: int | None = None
+
+    for line_number, line in enumerate(lines, start=1):
+        uncommented = strip_yaml_comment(line)
+        if not uncommented.strip():
+            continue
+
+        indentation = len(uncommented) - len(uncommented.lstrip(" "))
+        if block_scalar_parent_indent is not None:
+            if indentation > block_scalar_parent_indent:
+                continue
+            block_scalar_parent_indent = None
+
+        if in_jobs_block and any(delimiter in uncommented for delimiter in "{}[]") and not flow_delimiters_balanced(uncommented):
+            violations.append(
+                f"{workflow_file}:{line_number}: multi-line flow collections inside jobs are unsupported; "
+                "use complete single-line flow collections or block mappings"
+            )
+
+        # Do not interpret script or other literal/folded scalar bodies as YAML.
+        # A sequence item such as "- run: |" places the mapping key after "- ".
+        scalar_header_text = uncommented[indentation:]
+        if scalar_header_text.startswith("- "):
+            scalar_header_text = scalar_header_text[2:]
+        scalar_header = BLOCK_MAPPING_KEY.match(scalar_header_text)
+        if scalar_header is not None and is_block_scalar_header(
+            scalar_header.group("value").strip()
+        ):
+            block_scalar_parent_indent = indentation
+
+        block_match = BLOCK_MAPPING_KEY.match(uncommented)
+        raw_key: str | None = None
+        decoded_key: str | None = None
+        value = ""
+        if block_match is not None:
+            raw_key = block_match.group("key")
+            decoded_key = decode_yaml_mapping_key(raw_key)
+            value = block_match.group("value").strip()
+
+            if indentation == 0:
+                if decoded_key == "jobs":
+                    if not value:
+                        in_jobs_block = True
+                    elif value.startswith("{"):
+                        in_jobs_block = False
+                        if not flow_delimiters_balanced(value):
+                            violations.append(
+                                f"{workflow_file}:{line_number}: multi-line flow mappings in jobs are unsupported; "
+                                "use an inspectable block mapping or a complete single-line flow mapping"
+                            )
+                    else:
+                        in_jobs_block = False
+                        violations.append(
+                            f"{workflow_file}:{line_number}: jobs must use an inspectable block or flow mapping; "
+                            "aliases and tagged job mappings are unsupported"
+                        )
+                else:
+                    in_jobs_block = False
+
+                if decoded_key == "permissions":
+                    top_level_permissions.append((line_number - 1, raw_key, value))
+            elif in_jobs_block:
+                if decoded_key == "permissions":
+                    violations.append(
+                        f"{workflow_file}:{line_number}: job-level permissions overrides are unsupported "
+                        "at every indentation; keep the single workflow-level contents: read grant"
+                    )
+                if value.startswith(("&", "*", "!")):
+                    violations.append(
+                        f"{workflow_file}:{line_number}: YAML anchors, aliases and tags on job values are unsupported"
+                    )
+
+        inspect_job_flow = in_jobs_block or (
+            indentation == 0 and decoded_key == "jobs" and value.startswith("{")
+        )
+        if inspect_job_flow:
+            for _, _, contents in flow_mapping_ranges(uncommented):
+                entries = split_flow_mapping_entries(contents, allow_nested=True)
+                if entries is None:
+                    violations.append(
+                        f"{workflow_file}:{line_number}: job flow mappings must be complete and inspectable"
+                    )
+                    continue
+                for entry in entries:
+                    entry_match = re.match(
+                        rf"^\s*(?P<key>{YAML_MAPPING_KEY})\s*:\s*(?P<value>.*?)\s*$",
+                        entry,
+                    )
+                    if entry_match is None:
+                        continue
+                    if decode_yaml_mapping_key(entry_match.group("key")) == "permissions":
+                        violations.append(
+                            f"{workflow_file}:{line_number}: flow-style job permissions overrides are unsupported; "
+                            "keep the single workflow-level contents: read grant"
+                        )
+                    if entry_match.group("value").startswith(("&", "*", "!")):
+                        violations.append(
+                            f"{workflow_file}:{line_number}: YAML anchors, aliases and tags in job flow mappings are unsupported"
+                        )
+
+    if len(top_level_permissions) != 1:
+        violations.append(
+            f"{workflow_file}: workflow must declare exactly one top-level permissions block "
+            "containing only contents: read"
+        )
+        return violations
+
+    permissions_index, raw_key, value = top_level_permissions[0]
+    if raw_key != "permissions" or value:
+        violations.append(
+            f"{workflow_file}:{permissions_index + 1}: permissions must use a plain top-level block mapping"
+        )
+        return violations
+
+    entries: list[tuple[str, str, str]] = []
+    for candidate_index in range(permissions_index + 1, len(lines)):
+        candidate = strip_yaml_comment(lines[candidate_index])
+        if not candidate.strip():
+            continue
+        indentation = len(candidate) - len(candidate.lstrip(" "))
+        if indentation == 0:
+            break
+        if indentation != 2:
+            violations.append(
+                f"{workflow_file}:{candidate_index + 1}: workflow permissions must be a flat two-space mapping"
+            )
+            continue
+        child_match = BLOCK_MAPPING_KEY.match(candidate)
+        if child_match is None:
+            violations.append(
+                f"{workflow_file}:{candidate_index + 1}: workflow permissions contain an unsupported entry"
+            )
+            continue
+        raw_child_key = child_match.group("key")
+        decoded_child_key = decode_yaml_mapping_key(raw_child_key)
+        child_value = child_match.group("value").strip()
+        entries.append((raw_child_key, decoded_child_key or "", child_value))
+        if (raw_child_key, decoded_child_key, child_value) != ("contents", "contents", "read"):
+            violations.append(
+                f"{workflow_file}:{candidate_index + 1}: only the literal contents: read workflow permission is allowed"
+            )
+
+    if len(entries) != 1:
+        violations.append(
+            f"{workflow_file}:{permissions_index + 1}: workflow permissions must contain exactly one contents: read entry"
+        )
+    return violations
+
+
 def verify_workflows(workflow_directory: Path) -> list[str]:
-    """Return violations for mutable or unsupported workflow action references."""
+    """Return violations for read-only token permissions and immutable workflow references."""
     if not workflow_directory.is_dir():
         return [f"workflow directory does not exist: {workflow_directory}"]
 
@@ -526,6 +680,8 @@ def verify_workflows(workflow_directory: Path) -> list[str]:
         except (OSError, UnicodeError) as exception:
             violations.append(f"cannot read workflow {workflow_file}: {exception}")
             continue
+
+        violations.extend(workflow_permissions_are_read_only(lines, workflow_file))
 
         for line_number, line in enumerate(lines, start=1):
             uncommented = strip_yaml_comment(line)
@@ -608,7 +764,7 @@ def main() -> int:
             print(f"ERROR: {violation}", file=sys.stderr)
         return 1
 
-    print("GitHub workflow actions and service images use immutable revisions/digests.")
+    print("GitHub workflows use read-only token permissions and immutable action/image references.")
     return 0
 
 
