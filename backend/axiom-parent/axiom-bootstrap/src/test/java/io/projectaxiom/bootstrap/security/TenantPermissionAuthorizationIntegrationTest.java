@@ -3,6 +3,8 @@ package io.projectaxiom.bootstrap.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Set;
 import java.util.UUID;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -26,10 +29,17 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
+@TestPropertySource(properties = {
+        "AXIOM_OIDC_ISSUER_URI=",
+        "AXIOM_OIDC_AUDIENCE="
+})
 @Import(TenantPermissionAuthorizationIntegrationTest.SecurityTestConfiguration.class)
 class TenantPermissionAuthorizationIntegrationTest {
     @Autowired
@@ -44,6 +54,9 @@ class TenantPermissionAuthorizationIntegrationTest {
     @Autowired
     private ApplicationContext applicationContext;
 
+    @Autowired
+    private MockMvc mockMvc;
+
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
@@ -54,6 +67,18 @@ class TenantPermissionAuthorizationIntegrationTest {
         assertThat(applicationContext.getBeansOfType(OrganizationController.class)).isEmpty();
         assertThat(applicationContext.getBeansOfType(PartyController.class)).isEmpty();
         assertThat(applicationContext.getBeansOfType(PartyContactPointController.class)).isEmpty();
+    }
+
+    @Test
+    void deniesProtectedHttpRoutesWhenOidcIsNotConfiguredOutsideLocalProfile() throws Exception {
+        assertThat(OidcSecurityConfiguration.resolveOidcSettings(
+                applicationContext.getEnvironment()).configured()).isFalse();
+
+        mockMvc.perform(get("/api/v1/tenants/{tenantId}/parties", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/v1/system"))
+                .andExpect(status().isOk());
     }
 
     @Test
