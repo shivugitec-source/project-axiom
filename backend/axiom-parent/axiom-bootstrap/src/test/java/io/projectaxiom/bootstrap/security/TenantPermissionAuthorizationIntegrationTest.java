@@ -1,5 +1,6 @@
 package io.projectaxiom.bootstrap.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -9,12 +10,16 @@ import java.util.UUID;
 import io.projectaxiom.common.TenantContext;
 import io.projectaxiom.identity.IdentityService;
 import io.projectaxiom.identity.IdentityUser;
+import io.projectaxiom.organization.OrganizationController;
 import io.projectaxiom.organization.OrganizationService;
 import io.projectaxiom.organization.Tenant;
+import io.projectaxiom.party.PartyContactPointController;
+import io.projectaxiom.party.PartyController;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
@@ -36,9 +41,19 @@ class TenantPermissionAuthorizationIntegrationTest {
     @Autowired
     private SecuredTenantOperations securedTenantOperations;
 
+    @Autowired
+    private ApplicationContext applicationContext;
+
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void tenantBusinessControllersAreNotRegisteredOutsideTheLocalProfile() {
+        assertThat(applicationContext.getBeansOfType(OrganizationController.class)).isEmpty();
+        assertThat(applicationContext.getBeansOfType(PartyController.class)).isEmpty();
+        assertThat(applicationContext.getBeansOfType(PartyContactPointController.class)).isEmpty();
     }
 
     @Test
