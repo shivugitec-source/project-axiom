@@ -70,16 +70,24 @@ class ControlCenterAssetTests(unittest.TestCase):
     def test_github_data_is_escaped_before_html_interpolation(self):
         self.assertIn("const esc =", self.javascript)
         for field in (
-            "run.html_url", "run.name", "run.head_branch", "run.head_sha",
+            "run.html_url", "run.name", "run.head_branch",
             "pr.html_url", "pr.title", "commit.html_url",
         ):
             self.assertIn(f"esc({field})", self.javascript)
+        # The dashboard intentionally displays a shortened commit SHA, but
+        # still HTML-escapes that derived value before interpolation.
+        self.assertIn("esc(shortSha(run.head_sha))", self.javascript)
 
     def test_dashboard_is_public_read_only_and_has_no_embedded_credentials(self):
+        # The public endpoint is composed from fixed repository constants;
+        # do not require a duplicated literal URL or add browser credentials.
+        self.assertIn('const OWNER = "shivugitec-source";', self.javascript)
+        self.assertIn('const REPO = "project-axiom";', self.javascript)
         self.assertIn(
-            'https://api.github.com/repos/shivugitec-source/project-axiom',
+            "const API = `https://api.github.com/repos/${OWNER}/${REPO}`;",
             self.javascript,
         )
+        self.assertIn('fetch(`${API}/${path}`', self.javascript)
         self.assertNotRegex(self.javascript, r'\bAuthorization\s*:')
         self.assertNotRegex(self.javascript, r'gh[pousr]_[A-Za-z0-9]{20,}')
         self.assertNotRegex(self.javascript, r'\b(?:eval|Function)\s*\(')
