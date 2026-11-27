@@ -16,7 +16,7 @@ const features = [
  ["Identity and access security","Implemented","OIDC JWT conversion, tenant context and permission authorization code plus tests.","backend/axiom-parent/axiom-bootstrap/src/main/java/io/projectaxiom/bootstrap/security"],
  ["Database isolation and migration controls","Implemented","Dedicated migrator and migration/role validation are part of the backend foundation.","backend"],
  ["Sugarcane weighment calculation","Partial","Exact gross, tare and net calculation is introduced; procurement, persistence, pricing and settlement are not delivered.","backend/axiom-parent/axiom-business"],
- ["Sugar procurement lifecycle","Planned","Supplier registration, cane booking, harvest scheduling, weighbridge integration and payment lifecycle.","Roadmap"],
+ ["Sugar business workflows","Planned","Next workflows require explicit business requirements; no procurement, pricing, quality, recovery, weighbridge or settlement rules are assumed.","Roadmap"],
  ["Operations UI and mobile app","Planned","No production operator frontend or Android client is currently delivered.","Roadmap"],
  ["Production deployment and tenant onboarding","Planned","Production identity-provider setup, tenant provisioning and production runtime deployment remain future work.","Roadmap"]
 ];
@@ -38,8 +38,8 @@ const modules = [
 ];
 const roadmap = [
  ["01 · CURRENT","Platform hardening","Continue closing tenant, IAM, database isolation and migration edge cases with repeatable CI evidence."],
- ["02 · NEXT","Sugar industry foundation","Expand weighment into bounded procurement concepts: supplier, cane booking, vehicle, delivery, quality and settlement rules."],
- ["03 · AFTER","Sugar workflows & APIs","Add persistence, API contracts, authorization, auditability and integration tests incrementally."],
+ ["02 · NEXT","Sugar requirements gate","Weighment is the only implemented sugar capability. Confirm the next business workflow and its rules before extending the domain model; no procurement, pricing, quality, recovery, weighbridge or settlement semantics are assumed."],
+ ["03 · AFTER","One approved sugar increment","After requirements are approved, implement one bounded workflow with explicit invariants, authorization, auditability and integration tests."],
  ["04 · LATER","Operator experience","Design responsive factory/field workflows after the domain model and security boundaries stabilize."],
  ["05 · LATER","Production readiness","Select hosting/runtime topology, external identity provider, secrets management, observability, backups and recovery."]
 ];
@@ -62,9 +62,10 @@ async function refresh(){
   const [commits,runs,pulls,repo] = results;
   if(repo.status==="fulfilled"){
     const branch=repo.value.default_branch||"main";
-    $("main-sha").textContent=shortSha(repo.value.pushed_at?null:repo.value.default_branch);
-    $("main-sha").textContent=shortSha(repo.value.default_branch==="main" ? (commits.status==="fulfilled"?commits.value[0]?.sha:null) : null);
-    $("main-updated").textContent=`Default branch: ${branch} · ${date(repo.value.pushed_at)}`;
+    const latestMainCommit=commits.status==="fulfilled"?commits.value[0]:null;
+    $("main-sha").textContent=shortSha(latestMainCommit?.sha);
+    const mainCommitDate=latestMainCommit?.commit?.committer?.date||latestMainCommit?.commit?.author?.date;
+    $("main-updated").textContent=`Default branch: ${branch} · ${mainCommitDate?date(mainCommitDate):"commit date unavailable"}`;
   } else {$("main-sha").textContent="Unavailable";$("main-updated").textContent=repo.reason.message;}
   if(runs.status==="fulfilled"){
     const list=runs.value.workflow_runs||[],latest=list[0];
