@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="description" content="Project Axiom engineering control center — architecture, delivery health, features and roadmap.">
+  <title>Axiom Control Center</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#overview"><span class="brand-mark">A</span><span><b>AXIOM</b><small>CONTROL CENTER</small></span></a>
+      <div class="workspace-label">PROJECT WORKSPACE</div>
+      <nav aria-label="Main navigation">
+        <a class="nav-link active" href="#overview" data-view="overview"><span>◫</span> Overview</a>
+        <a class="nav-link" href="#architecture" data-view="architecture"><span>⌘</span> Architecture</a>
+        <a class="nav-link" href="#features" data-view="features"><span>▦</span> Feature tracker</a>
+        <a class="nav-link" href="#delivery" data-view="delivery"><span>↗</span> Engineering delivery</a>
+        <a class="nav-link" href="#roadmap" data-view="roadmap"><span>☷</span> Roadmap</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <span class="live-dot"></span><span>GitHub public data</span>
+        <a href="https://github.com/shivugitec-source/project-axiom" target="_blank" rel="noreferrer">Open repository ↗</a>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div><div class="eyebrow">ENTERPRISE FOUNDATION PLATFORM</div><h1 id="page-title">Project overview</h1></div>
+        <div class="top-actions"><span class="read-only">READ ONLY</span><button id="refresh" class="refresh">↻ <span>Refresh data</span></button></div>
+      </header>
+      <section class="view active" id="view-overview">
+        <div class="hero">
+          <div><div class="eyebrow light">BUILD ONCE. CONFIGURE FOREVER.</div><h2>One foundation.<br><em>Many industries.</em></h2><p>A modular, cloud-native enterprise platform built around reusable business capabilities.</p><a class="hero-link" href="https://github.com/shivugitec-source/project-axiom" target="_blank" rel="noreferrer">Explore source code ↗</a></div>
+          <div class="hero-orbit"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit-core">AX<br><small>CORE</small></div><span class="orbit-tag tag-one">BUSINESS</span><span class="orbit-tag tag-two">DATA</span><span class="orbit-tag tag-three">SECURITY</span></div>
+        </div>
+        <div class="metric-grid">
+          <article class="metric"><span class="metric-label">MAIN BRANCH</span><strong id="main-sha">Loading…</strong><small id="main-updated">Fetching latest commit</small></article>
+          <article class="metric"><span class="metric-label">LATEST CI</span><strong id="ci-status">Loading…</strong><small id="ci-detail">GitHub Actions</small></article>
+          <article class="metric"><span class="metric-label">OPEN PULL REQUESTS</span><strong id="open-pr-count">—</strong><small>Live from GitHub</small></article>
+          <article class="metric"><span class="metric-label">DELIVERED CAPABILITIES</span><strong>Platform foundation</strong><small>Evidence-linked status below</small></article>
+        </div>
+        <div class="section-heading"><div><div class="eyebrow">SYSTEM SNAPSHOT</div><h3>What exists today</h3></div><span class="subtle" id="last-refresh">Connecting to GitHub…</span></div>
+        <div class="overview-grid">
+          <article class="panel wide"><div class="panel-head"><div><h3>Platform foundation</h3><p>Implemented building blocks verified in the repository</p></div><span class="pill green">IN DEVELOPMENT</span></div><div class="capability-list" id="capability-list"></div></article>
+          <article class="panel"><div class="panel-head"><div><h3>Latest activity</h3><p>Recent commits on main</p></div></div><div id="commit-list" class="activity-list"><div class="skeleton"></div></div></article>
+        </div>
+        <div class="disclaimer">This is an engineering status view, not a production operations console. Feature labels are evidence-based; planned work is not presented as shipped.</div>
+      </section>
+      <section class="view" id="view-architecture">
+        <div class="section-heading"><div><div class="eyebrow">DESIGN & BOUNDARIES</div><h3>Architecture explorer</h3><p class="section-copy">Current repository structure and documented platform boundaries.</p></div></div>
+        <div class="architecture-banner"><div><span class="eyebrow light">ARCHITECTURAL STYLE</span><h2>Modular monolith</h2><p>Explicit module boundaries with a dedicated bootstrap and migration process.</p></div><div class="stack-tags"><span>Java 21</span><span>Spring Boot</span><span>PostgreSQL</span><span>Flyway</span><span>Maven</span></div></div>
+        <div class="module-grid" id="module-grid"></div>
+        <div class="panel note-panel"><h3>Runtime boundary</h3><p>The API/runtime application and schema migrator are separate artifacts. Database migration is performed through the dedicated migrator path rather than at normal API startup.</p><a href="https://github.com/shivugitec-source/project-axiom/tree/main/backend" target="_blank" rel="noreferrer">Inspect backend source ↗</a></div>
+      </section>
+      <section class="view" id="view-features">
+        <div class="section-heading"><div><div class="eyebrow">CAPABILITY REGISTER</div><h3>Feature tracker</h3><p class="section-copy">Statuses distinguish implemented foundations from work that is still designed or planned.</p></div><div class="legend"><span class="pill green">Implemented</span><span class="pill amber">Partial</span><span class="pill gray">Planned</span></div></div>
+        <div class="panel table-panel"><div class="feature-table" id="feature-table"></div></div>
+      </section>
+      <section class="view" id="view-delivery">
+        <div class="section-heading"><div><div class="eyebrow">CONTINUOUS DELIVERY</div><h3>Engineering delivery</h3><p class="section-copy">Live pull request and GitHub Actions information from the public repository.</p></div><a class="text-link" href="https://github.com/shivugitec-source/project-axiom/actions" target="_blank" rel="noreferrer">All workflows ↗</a></div>
+        <div class="delivery-grid"><article class="panel"><div class="panel-head"><div><h3>Workflow runs</h3><p>Most recent GitHub Actions runs</p></div></div><div id="workflow-list" class="activity-list"><div class="skeleton"></div></div></article><article class="panel"><div class="panel-head"><div><h3>Open pull requests</h3><p>Current review queue</p></div></div><div id="pr-list" class="activity-list"><div class="skeleton"></div></div></article></div>
+      </section>
+      <section class="view" id="view-roadmap">
+        <div class="section-heading"><div><div class="eyebrow">DELIVERY SEQUENCE</div><h3>Roadmap</h3><p class="section-copy">A transparent view of the next engineering increments. These are targets, not claims of completion.</p></div></div>
+        <div class="roadmap" id="roadmap-list"></div>
+      </section>
+      <footer><span>PROJECT AXIOM · CONTROL CENTER</span><span>Data source: GitHub REST API · <span id="footer-time">—</span></span></footer>
+    </main>
+  </div>
+  <script src="./app.js" defer></script>
+</body>
+</html>
