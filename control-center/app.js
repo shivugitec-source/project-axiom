@@ -15,7 +15,8 @@ const features = [
  ["Party domain","Implemented","Party and contact-point controllers and domain components are present.","backend/axiom-parent/axiom-api/src/main/java/io/projectaxiom/party"],
  ["Identity and access security","Implemented","OIDC JWT conversion, tenant context and permission authorization code plus tests.","backend/axiom-parent/axiom-bootstrap/src/main/java/io/projectaxiom/bootstrap/security"],
  ["Database isolation and migration controls","Implemented","Dedicated migrator and migration/role validation are part of the backend foundation.","backend"],
- ["Sugarcane weighment calculation","Partial","Exact gross, tare and net calculation is introduced; procurement, persistence, pricing and settlement are not delivered.","backend/axiom-parent/axiom-business"],
+ ["Sugarcane weighment calculation","Implemented","Exact-precision gross, tare and net weighment value object with boundary tests.","backend/axiom-parent/axiom-business"],
+ ["Supplier-linked cane delivery record","Partial","Immutable record links tenant, mill, supplier, weighbridge, vehicle, exact weighment and capture time. Persistence, authorization and APIs remain next.","backend/axiom-parent/axiom-business/src/main/java/io/projectaxiom/sugar"],
  ["Sugar business workflows","Planned","Next workflows require explicit business requirements; no procurement, pricing, quality, recovery, weighbridge or settlement rules are assumed.","Roadmap"],
  ["Operations UI and mobile app","Planned","No production operator frontend or Android client is currently delivered.","Roadmap"],
  ["Production deployment and tenant onboarding","Planned","Production identity-provider setup, tenant provisioning and production runtime deployment remain future work.","Roadmap"]
@@ -26,7 +27,7 @@ const capabilities = [
  ["Identity & access","OIDC/JWT and tenant permission checks"],
  ["Database safeguards","Tenant isolation and restricted migration/runtime roles"],
  ["Schema evolution","Dedicated Flyway migration artifact"],
- ["Sugar domain starter","Exact-precision weighment value object only"]
+ ["Sugar domain starter","Exact-precision weighment and supplier-linked cane delivery record"]
 ];
 const modules = [
  ["COMMON","axiom-common","Shared primitives and cross-cutting types."],
@@ -37,11 +38,11 @@ const modules = [
  ["MIGRATOR","axiom-migrator","Isolated schema migration execution."]
 ];
 const roadmap = [
- ["01 · CURRENT","Platform hardening","Continue closing tenant, IAM, database isolation and migration edge cases with repeatable CI evidence."],
- ["02 · NEXT","Sugar requirements gate","Weighment is the only implemented sugar capability. Confirm the next business workflow and its rules before extending the domain model; no procurement, pricing, quality, recovery, weighbridge or settlement semantics are assumed."],
- ["03 · AFTER","One approved sugar increment","After requirements are approved, implement one bounded workflow with explicit invariants, authorization, auditability and integration tests."],
- ["04 · LATER","Operator experience","Design responsive factory/field workflows after the domain model and security boundaries stabilize."],
- ["05 · LATER","Production readiness","Select hosting/runtime topology, external identity provider, secrets management, observability, backups and recovery."]
+ ["01 · COMPLETE","Platform foundation","Modular backend, tenant/RLS and OIDC foundations, migration controls and repeatable Backend CI checks."],
+ ["02 · COMPLETE","Cane delivery domain record","Exact-precision weighment and immutable supplier-linked cane delivery record merged to main in PR #72."],
+ ["03 · NEXT","Tenant-safe persistence and APIs","Design schema, enforce tenant-consistent foreign references and authorization, then expose delivery registration and retrieval endpoints."],
+ ["04 · AFTER","Mill operations lifecycle","Add approved supplier, weighbridge, vehicle, gross/tare capture and delivery-state rules with audit history."],
+ ["05 · LATER","Operator experience and production readiness","Build operator UI after API/domain stabilization; then validate identity provider, secrets, observability, backups and deployment."]
 ];
 function renderStatic(){
   $("capability-list").innerHTML = capabilities.map(([name,detail])=>`<div class="capability"><b>${esc(name)}</b><small>${esc(detail)}</small></div>`).join("");
@@ -94,3 +95,4 @@ document.querySelectorAll(".nav-link").forEach(link=>link.addEventListener("clic
 }));
 $("refresh").addEventListener("click",refresh);
 renderStatic();refresh();
+\nsetInterval(refresh, 300000);\n
