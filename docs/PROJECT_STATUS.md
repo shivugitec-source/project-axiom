@@ -498,3 +498,11 @@
 - Post-merge main CI #488 (run `46034474480`) passed on the exact merge SHA `dcc666743074b2c6cbd14c3e149da1a2dcccf853`. All reported job steps succeeded. The Python suite passed 113 tests; Maven common passed 5, business passed 5, bootstrap passed 51 and migrator passed 2, all with zero failures, errors or skips and `BUILD SUCCESS`. PostgreSQL 17.12 integration passed; Flyway validated eight migrations and reported the schema up to date; API/migrator packaged-artifact separation and runtime-credentials-only verification completed successfully.
 - Historical dashboard CI #482/#483 failed on SHA `86be1fcbbdf37d939faab9f3d9ca2cfa07615352`, and #484/#485 failed on SHA `fb40b358c08d94afefab3babf2c42227a5d9c2cd`. Both failures were test-assertion defects in `backend/tests/test_control_center_assets.py`: the tests expected a literal API URL rather than the fixed-constant template and expected `esc(run.head_sha)` rather than the escaped shortened SHA. Corrective commit `f933df5f581e825c13dccd414306375a3c062bda` aligned the assertions with the actual fixed repository URL composition and shortened-SHA rendering without weakening the read-only, credential-absence or escaping checks. Exact-head runs #486 and #487 then passed.
 - No ADR was added: the dashboard does not change backend architecture, authorization, database roles, schema, migrations, RLS, production credentials or deployment behavior.
+
+
+### Sugar Industry — cane delivery weighment record (in progress)
+- Branch: `feature/sugar-cane-delivery-weighment-record-20261128`, based on main `fe7c315e1ca63582581883dcddad34747b3c6794`.
+- Added immutable `CaneDeliveryWeighment` domain record associating tenant, mill organization, supplier party, weighbridge, vehicle registration, exact `Weighment` and capture timestamp.
+- Added focused tests for complete records, required identity/context, vehicle registration and preservation of the weighment/time values.
+- This is a domain-only increment: no database schema, migration, API, scale integration, acceptance decision, quality policy, payable quantity or settlement behavior is introduced.
+- Next steps after CI: review exact-head test results, merge only after validation, then design tenant-isolated persistence and API around approved operational rules.
